@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#102f28">
+<title>Apuração • Presidência do Brasil</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><a class="brand" href="/" aria-label="Página inicial"><span class="brand-mark">◆</span> APURA BRASIL</a><span class="tag">ELEIÇÕES PRESIDENCIAIS</span></header>
+<main>
+<section class="intro"><div class="eyebrow">BRASIL · SEGUNDO TURNO</div><h1>Cada voto conta.<br><span>Acompanhe a apuração.</span></h1><p>Os resultados da eleição presidencial em um só lugar, com informações claras e fonte identificada.</p></section>
+<section class="toolbar" aria-label="Controles"><div><label for="year">Eleição</label><select id="year" disabled aria-label="Eleição presidencial de 2026"><option value="2026">Presidente · 2026</option></select></div><button id="refresh" type="button">↻ Atualizar</button></section>
+<div id="notice" class="notice" role="status" aria-live="polite">Preparando as informações da eleição…</div>
+<section class="summary" aria-label="Progresso da apuração"><div><span class="eyebrow">SEÇÕES TOTALIZADAS</span><strong id="progress">—</strong><div class="track"><div id="progress-bar"></div></div><small id="sections">Aguardando dados confirmados</small></div><div><span class="eyebrow">VOTOS VÁLIDOS</span><strong id="valid-votes">—</strong><small>Base do percentual dos candidatos</small></div><div><span class="eyebrow">GERAÇÃO DO ARQUIVO OFICIAL</span><strong id="updated" class="date">—</strong><small id="checked">Nenhuma consulta concluída</small></div></section>
+<section class="results"><div class="section-heading"><h2>Disputa pela Presidência</h2><span>RESULTADO NACIONAL</span></div><div id="candidates" class="candidates"><div class="empty"><span>◎</span><h3>Aguardando informações oficiais</h3><p>Os candidatos e seus votos aparecerão aqui quando houver dados confirmados para esta eleição.</p></div></div></section>
+<section class="details"><h2>Como ler este painel</h2><p>Os percentuais dos candidatos são calculados sobre os votos válidos. Votos brancos e nulos ficam fora dessa base. Resultados parciais podem mudar durante a totalização.</p><p id="source">Fonte: ainda não consultada.</p></section>
+<footer><span>APURA BRASIL</span><p>Painel independente. Consulte sempre os canais oficiais da Justiça Eleitoral.</p><a href="https://resultados.tse.jus.br/oficial/app/index.html#/eleicao/6258/uf/br/cargo/1/vis/nominal/resultados" target="_blank" rel="noopener noreferrer">Resultado no TSE ↗</a></footer>
+</main>
+<script src="app.js" type="module"></script>
+</body>
+</html>
