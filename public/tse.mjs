@@ -57,7 +57,13 @@ function normalizeVotes(raw, source) {
   // The official file gives Brazilian election time (UTC−03:00).
   const generatedAt = Date.parse(`${date[3]}-${date[2]}-${date[1]}T${raw.hg}-03:00`);
   if (!Number.isFinite(generatedAt)) throw new Error('Horário oficial inválido.');
-  return {year: 2026, round: 2, progress: number(raw.s.pst, 'percentual de seções', 100), sections, totalSections, validVotes: count(raw.v?.vv, 'votos válidos'), updated: `${raw.dg} às ${raw.hg} (Brasília)`, generatedAt, checked: new Date().toISOString(), candidates, source, final: raw.tf === 's'};
+  const category = (votes, share, label) => raw.v?.[votes] === undefined && raw.v?.[share] === undefined ? null : {votes:count(raw.v?.[votes], label),percent:number(raw.v?.[share], `percentual de ${label}`,100)};
+  const blankVotes = category('vb','pvb','votos brancos');
+  // tvn is the total of null ballots; pvn is a percentage *within* null ballots.
+  const nullVotes = category('tvn','ptvn','votos nulos');
+  const totalVotes = raw.v?.tv === undefined ? null : count(raw.v.tv,'total de votos');
+  if (totalVotes !== null && ((blankVotes?.votes??0)+(nullVotes?.votes??0)>totalVotes)) throw Error('Contagem de brancos e nulos inconsistente.');
+  return {year: 2026, round: 2, progress: number(raw.s.pst, 'percentual de seções', 100), sections, totalSections, validVotes: count(raw.v?.vv, 'votos válidos'), blankVotes, nullVotes, totalVotes, updated: `${raw.dg} às ${raw.hg} (Brasília)`, generatedAt, checked: new Date().toISOString(), candidates, source, final: raw.tf === 's'};
 }
 export async function fetchResults() {
   const url = new URL(RESULTS_URL);

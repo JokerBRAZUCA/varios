@@ -61,6 +61,17 @@ test('state votes validate the exact UF and archive independently from map progr
  assert.deepEqual(unchanged.resources,saved.resources);assert.equal(unchanged.index.entries.length,1);
 });
 
+test('blank and null percentages use the total-ballot fields, including historical signed files',async()=>{
+ const raw=await verifyJws(await fixture('national'));const data=normalize(raw);
+ assert.deepEqual(data.blankVotes,{votes:4158,percent:1.21});
+ assert.deepEqual(data.nullVotes,{votes:5153,percent:1.49});
+ assert.equal(data.totalVotes,345054);assert.notEqual(data.nullVotes.percent,Number(raw.v.pvn.replace(',','.')));
+ const state=normalizeState(await verifyJws(await fixture('am')),'am');
+ assert.deepEqual(state.blankVotes,{votes:0,percent:0});assert.deepEqual(state.nullVotes,{votes:0,percent:0});
+ const invalid=structuredClone(raw);invalid.v.tv='1';assert.throws(()=>normalize(invalid));
+ const missing=structuredClone(raw);delete missing.v.vb;assert.throws(()=>normalize(missing));
+});
+
 test('timeline distinguishes captures from national versions and identifies missing map sources',async()=>{
  const {timelineSummary}=await import('../public/timeline.mjs');
  const first={nationalHash:'a'.repeat(64),complete:false,availableSources:['national']};

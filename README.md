@@ -6,8 +6,9 @@ Painel independente da apuração presidencial de 2026 (eleição 6258, cargo 1)
 - Consulta direta do navegador ao TSE, com verificação Ed25519 dos arquivos JWS. TLS e assinaturas não são ignorados.
 - Mapa do Brasil com 27 UFs; mapa-múndi com países e territórios agrupando os 186 locais de votação no exterior presentes no catálogo verificado.
 - As cores mostram **seções totalizadas**, sem atribuir cores a candidatos ou projetar resultados. Percentuais por país são ponderados pela soma das seções.
-- Clique em uma UF para ver os percentuais e votos de cada candidato abaixo da totalização. O arquivo de votos tem seu próprio horário e assinatura; se ainda estiver zerado ou atrasado em relação ao mapa, isso fica explícito. Os valores não são inferidos do progresso das seções.
+- Clique em uma UF para ver os percentuais e votos de cada candidato abaixo da totalização. O arquivo de votos tem seu próprio horário e assinatura; se estiver zerado ou tiver uma totalização diferente do mapa, isso fica explícito. Os valores não são inferidos do progresso das seções. A consulta dos candidatos continua disponível mesmo quando falta o progresso do mapa.
 - Fotos oficiais do TSE nos cartões nacionais e nas UFs, associadas pelo identificador de candidatura do JWS verificado. Cópias das imagens ficam em `public/assets/candidates/`, com procedência em `sources.json`; falhas de imagem exibem iniciais sem afetar os resultados.
+- Votos brancos e nulos aparecem no resumo nacional e na UF selecionada, com quantidades e percentuais oficiais sobre o total de votos (`vb/pvb` e `tvn/ptvn`). Os percentuais dos candidatos usam votos válidos. Esses dados também seguem a captura selecionada e os backups; arquivos sem esses campos mostram ausência, sem inventar zeros. Um resultado de UF já verificado fica preservado na sessão caso falhem tanto o TSE quanto o arquivo da VPS.
 - Linha do tempo logo abaixo dos dados dos candidatos. O contador distingue capturas de versões nacionais diferentes; capturas parciais são identificadas. Se duas capturas preservam o mesmo arquivo nacional, os percentuais permanecem iguais. Uma seleção carrega a captura inteira: candidatos, votos, percentuais, seções, mapas e respectivos horários. O botão Ao vivo retorna às consultas atuais.
 - A reprodução percorre apenas capturas reais. Não há interpolação nem reconstrução de versões anteriores à primeira captura.
 - O botão Ativar som habilita um tom sintetizado inspirado na confirmação da urna. O navegador exige interação para liberar áudio. Uma nova versão verificada pode tocar; consultas idênticas, abertura inicial e reprodução do histórico ficam silenciosas.
@@ -65,9 +66,9 @@ test -z "$(git status --porcelain)"
 git pull --ff-only origin main
 node scripts/build-maps.mjs
 node --test tests/tse.test.mjs tests/archive.test.mjs
-backup_dir=$(mktemp -d /root/eleicaopresidente-v4-backup-XXXXXXXX)
-cp -a /var/www/eleicaopresidente-v4/. "$backup_dir/"
-cp -a public/. /var/www/eleicaopresidente-v4/
+backup_dir=$(mktemp -d /root/eleicaopresidente-v5-backup-XXXXXXXX)
+cp -a /var/www/eleicaopresidente-v5/. "$backup_dir/"
+cp -a public/. /var/www/eleicaopresidente-v5/
 printf 'Backup anterior: %s\n' "$backup_dir"
 )
 ```
