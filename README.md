@@ -1,60 +1,76 @@
 # Apura Brasil
 
-Dashboard para acompanhar o **segundo turno presidencial brasileiro de 2026**, eleição **6258**, cargo **1**. Funciona no navegador do celular e computador. Não usa backend, banco de dados, chave de API, analytics, CDN de bibliotecas ou API intermediária: as consultas saem do navegador diretamente para o TSE. Precisa apenas de uma hospedagem estática HTTPS para os arquivos da interface.
+Painel independente da apuração presidencial de 2026 (eleição 6258, cargo 1). Interface estática em `public/`, publicada na VPS em https://eleicaopresidente.close4us.com.
 
-## Fonte oficial verificada
+## Uso
+- Consulta direta do navegador ao TSE, com verificação Ed25519 dos arquivos JWS. TLS e assinaturas não são ignorados.
+- Mapa do Brasil com 27 UFs; mapa-múndi com países e territórios agrupando os 186 locais de votação no exterior presentes no catálogo verificado.
+- As cores mostram **seções totalizadas**, sem atribuir cores a candidatos ou projetar resultados. Percentuais por país são ponderados pela soma das seções.
+- Linha do tempo logo abaixo dos dados dos candidatos. Uma seleção carrega a captura inteira: candidatos, votos, percentuais, seções, mapas e respectivos horários. O botão Ao vivo retorna às consultas atuais.
+- A reprodução percorre apenas capturas reais. Não há interpolação nem reconstrução de versões anteriores à primeira captura.
+- O botão Ativar som habilita um tom sintetizado inspirado na confirmação da urna. O navegador exige interação para liberar áudio. Uma nova versão verificada pode tocar; consultas idênticas, abertura inicial e reprodução do histórico ficam silenciosas.
+- Se o TSE falhar, a interface consulta o arquivo da VPS e verifica novamente hash e assinatura. O modo BACKUP e o horário de captura ficam visíveis. Sem backup acessível, preserva os últimos dados já recebidos na sessão; nunca inventa resultados.
 
-Página do TSE:
-https://resultados.tse.jus.br/oficial/app/index.html#/eleicao/6258/uf/br/cargo/1/vis/nominal/resultados
+## Fontes
+- Nacional: https://resultados.tse.jus.br/oficial/ele2026/6258/dados/br/br-c0001-e006258-u.jws
+- Progresso por UF e consolidado exterior: https://resultados.tse.jus.br/oficial/ele2026/6258/dados/br/br-e006258-ab.jws
+- Progresso dos locais no exterior: https://resultados.tse.jus.br/oficial/ele2026/6258/dados/zz/zz-e006258-ab.jws
+- Catálogo oficial de localidades: https://resultados.tse.jus.br/oficial/ele2026/6258/config/mun-e006258-cm.jws
+- Aplicativo oficial: https://resultados.tse.jus.br/oficial/app/index.html#/eleicao/6258/uf/br/cargo/1/vis/nominal/resultados
 
-Requisição de resultados usada pelo aplicativo oficial:
+A chave pública do aplicativo oficial, build 26.10.17 (7216371), está documentada em `public/tse.mjs`. Uma chave desconhecida ou assinatura inválida é rejeitada, inclusive nos backups.
 
-```text
-GET https://resultados.tse.jus.br/oficial/ele2026/6258/dados/br/br-c0001-e006258-u.jws?nocache=<timestamp-em-milissegundos>
-```
+As fontes têm gerações independentes. Se o detalhamento internacional divergir do consolidado do exterior, há aviso visível; os valores não são completados por estimativa. Zero seções e ausência de dados são estados diferentes. O resumo nacional inclui votos no exterior, enquanto Brasil no mapa-múndi representa apenas seções no território brasileiro.
 
-A captura de rede após clicar em **Atualizar** no aplicativo oficial confirmou HTTP 200 nessa URL, com alteração de `nocache`. O aplicativo consulta um arquivo unificado **JWS**, não o antigo `-r.json`. O painel usa a mesma URL e acrescenta `nocache` em cada consulta. A chave pública Ed25519 foi obtida do JavaScript do próprio TSE, build `26.10.17 (7216371)`, e está documentada em `public/tse.mjs`. O painel verifica a assinatura antes de exibir qualquer resultado. Se o TSE trocar a chave, é necessário conferir a nova chave no aplicativo oficial e atualizar o painel; não há fallback que ignore assinatura.
+Malhas simplificadas: [IBGE](https://servicodados.ibge.gov.br/api/docs/malhas?versao=3) e [Natural Earth](https://www.naturalearthdata.com/about/terms-of-use/). O arquivo `public/assets/places.json` associa os códigos e nomes do catálogo do TSE aos agrupamentos geográficos; as posições dos pontos no mapa-múndi são referências dos países/territórios, e não coordenadas dos locais de votação.
 
-O catálogo oficial é `https://resultados.tse.jus.br/oficial/comum/config/ele-c.jws`. A associação de 6258 com Presidência, segundo turno e ciclo ele2026 foi conferida no catálogo. O arquivo unificado contém candidatos em `carg[].agr[].par[].cand[]`, seções em `s` e votos em `v`. O painel usa `s.pst`, `s.st`, `s.ts`, `v.vv`, `dg` e `hg`.
+## Arquivo na VPS
+A interface permanece estática e as consultas ao vivo continuam diretas ao TSE. Um coletor Node.js separado arquiva os JWS para continuidade e histórico; ele não fornece uma API intermediária.
 
-Acesso com origem externa foi testado e o TSE retornou `Access-Control-Allow-Origin` para a origem solicitante. Não há proxy público ou serviço intermediário. O navegador precisa suportar módulos JavaScript, Fetch e verificação Ed25519 via Web Crypto, em contexto seguro HTTPS (ou localhost para desenvolvimento).
+- Código do coletor: `/opt/eleicaopresidente-archive/archive/collect.mjs`, com seus módulos em `../public/`.
+- Dados: `/var/lib/eleicaopresidente-archive/public/`.
+- Serviço: `eleicaopresidente-archive.service`; agendamento: `eleicaopresidente-archive.timer`, com intervalo de 30 segundos após cada execução.
+- Arquivos JWS são preservados por SHA-256. Capturas referenciam os últimos arquivos válidos de cada fonte e preservam o horário de geração de cada um. Repetições não geram cópias adicionais.
+- Falha de rede, HTTP de erro, assinatura inválida e regressão de geração não substituem o último arquivo válido.
+- `latest.json` informa a última tentativa, referências válidas e falhas; `index.json` lista capturas com novas versões; `snapshots/` e `tokens/` preservam conteúdo.
+- Nginx publica o arquivo apenas para leitura em `/historico/`, sem listagem de diretórios. O coletor não abre portas.
 
-## Comportamento
+A amostragem não garante capturar todas as publicações que o TSE possa substituir entre consultas. O histórico começa na primeira captura observada, identificada na interface. O arquivo está no mesmo servidor e protege contra indisponibilidade da fonte; não é uma cópia em outra máquina.
 
-- Consulta inicial, botão Atualizar e consultas automáticas a cada 30 segundos, sem requisições sobrepostas.
-- Percentuais dos candidatos sobre votos válidos, nomes e partidos vindos da fonte.
-- Data de geração do arquivo oficial em horário de Brasília e horário da consulta no fuso do navegador.
-- Rejeição de outra eleição, abrangência, turno ou assinatura inválida.
-- Preservação dos últimos números da sessão em caso de erro, com aviso de atualização interrompida.
-- Rejeição de arquivos com data de geração anterior à última recebida.
-- Distinção entre progresso arredondado de 100% e totalização final indicada por `tf`.
-
-A frequência de consulta não garante dados novos a cada 30 segundos: o TSE controla a geração e o cache dos arquivos. O painel é independente e não declara vencedor por conta própria.
-
-## Desenvolvimento
-
-Sem instalação de dependências. Use o checkout existente, sem criar worktree:
-
-```sh
-cd /workspace/varios
-python3 -m http.server 8000 --bind 0.0.0.0 --directory public
-```
-
-O Python serve somente os arquivos locais; não consulta nem retransmite dados eleitorais. Não abra `index.html` por `file://`, pois a página usa módulos JavaScript.
-
-Testes do adaptador e da assinatura (Node.js 24):
+## Desenvolvimento e validação
+Node.js 24, sem dependências npm:
 
 ```sh
-node --test tests/tse.test.mjs
+node scripts/build-maps.mjs
+node --test tests/tse.test.mjs tests/archive.test.mjs
+python3 -m http.server 8000 --bind 127.0.0.1 --directory public
 ```
 
-Os testes unitários usam candidatos fictícios isolados e não fazem parte dos arquivos publicados. Uma resposta oficial real também foi verificada e a interface foi exercitada no Chromium, preservando validação TLS e os cabeçalhos CORS recebidos. Nesse ambiente, a automação precisou usar o transporte HTTPS do Python com a CA configurada, pois o Chromium não reconheceu a CA do proxy da sessão. Isso é uma particularidade da validação no ambiente, não uma dependência da aplicação.
+A geração das malhas requer acesso HTTPS ao IBGE e ao repositório oficial do Natural Earth. `public/assets/maps.json` é gerado, não versionado. Os demais arquivos de `public/` estão no repositório. Não abra por `file://`, pois são usados módulos ES. Para histórico local, é necessário mapear `/historico/` a um arquivo de capturas; em produção isso já é feito pelo Nginx.
 
-## Publicar com GitHub Pages
+Os testes usam amostras oficiais assinadas preservadas em `tests/fixtures/` e dados sintéticos exclusivamente em testes isolados. Nenhuma fixture é publicada na área pública. Há testes para integridade, assinatura, cobertura geográfica, deduplicação, preservação em falha e comportamento do som.
 
-1. Envie os arquivos para a branch `main` de `JokerBRAZUCA/varios`.
-2. No GitHub, em **Settings → Pages → Build and deployment**, escolha **GitHub Actions**.
-3. Em **Actions → Publicar dashboard → Run workflow**, execute o workflow incluído.
-4. Abra o endereço HTTPS informado pelo GitHub Pages e confirme que o painel mostra “assinatura digital verificada”.
+## Atualizar a versão publicada
+Na sessão SSH da VPS:
 
-O workflow é manual: não publica automaticamente ao alterar código. O código foi enviado à branch `main`. A ativação do Pages e a execução do workflow ainda estão pendentes: o ambiente bloqueou o acesso à API do GitHub. Nenhuma publicação pública foi confirmada. A disponibilidade de Pages depende do plano e da visibilidade do repositório. Não há servidor de aplicação a manter.
+```sh
+(
+set -eu
+cd /root/eleicao-deploy-20261025
+test -z "$(git status --porcelain)"
+git pull --ff-only origin main
+node scripts/build-maps.mjs
+node --test tests/tse.test.mjs tests/archive.test.mjs
+backup_dir=$(mktemp -d /root/eleicaopresidente-v2-backup-XXXXXXXX)
+cp -a /var/www/eleicaopresidente-v2/. "$backup_dir/"
+cp -a public/. /var/www/eleicaopresidente-v2/
+printf 'Backup anterior: %s\n' "$backup_dir"
+)
+```
+
+Publicar **somente `public/`**, incluindo seus módulos e `assets/`. Não copiar checkout, `.git`, fixtures, scripts de desenvolvimento ou credenciais para a área pública. Atualizações estáticas não exigem reiniciar Nginx. Abra o HTTPS público, confirme origem, horários e assinatura e teste a linha do tempo. Uma atualização do coletor deve ser instalada separadamente em seu diretório, usando substituição atômica e conferindo os registros do serviço.
+
+## Recuperação e serviços existentes
+A configuração exclusiva deste subdomínio fica em `/etc/nginx/sites-available/eleicaopresidente`. O backup original completo do Nginx fica em `/root/eleicao-nginx-backup-20261025`. As configurações dos demais sites não foram alteradas.
+
+A primeira versão foi preservada em `/var/www/eleicaopresidente`. Para recuperação da interface, é possível restaurar apenas o `root` do bloco HTTPS deste subdomínio para esse diretório, validar com `nginx -t` e recarregar Nginx. Não substitua a configuração global nem restaure todos os sites por causa deste painel. O diretório de desafios HTTP do Certbot deve continuar sendo o configurado na emissão original, para preservar a renovação.

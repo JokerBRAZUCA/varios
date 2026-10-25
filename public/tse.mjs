@@ -44,7 +44,7 @@ export function normalize(raw) {
   // The official file gives Brazilian election time (UTC−03:00).
   const generatedAt = Date.parse(`${date[3]}-${date[2]}-${date[1]}T${raw.hg}-03:00`);
   if (!Number.isFinite(generatedAt)) throw new Error('Horário oficial inválido.');
-  return {year: 2026, round: 2, progress: number(raw.s.pst, 'percentual de seções', 100), sections, totalSections, validVotes: count(raw.v?.vv, 'votos válidos'), updated: `${raw.dg} às ${raw.hg} (Brasília)`, generatedAt, checked: new Date().toISOString(), candidates: candidates.sort((a, b) => b.votes - a.votes), source: RESULTS_URL, final: raw.tf === 's'};
+  return {year: 2026, round: 2, progress: number(raw.s.pst, 'percentual de seções', 100), sections, totalSections, validVotes: count(raw.v?.vv, 'votos válidos'), updated: `${raw.dg} às ${raw.hg} (Brasília)`, generatedAt, checked: new Date().toISOString(), candidates, source: RESULTS_URL, final: raw.tf === 's'};
 }
 export async function fetchResults() {
   const url = new URL(RESULTS_URL);
