@@ -40,6 +40,12 @@ export function normalizeState(raw, uf) {
   if (raw.ele !== '6258' || raw.t !== '2' || raw.f !== 'o' || raw.tpabr !== 'uf' || raw.cdabr !== uf) throw Error('O resultado não corresponde à UF selecionada.');
   return {...normalizeVotes(raw, source), uf};
 }
+export const EXTERIOR_URL=RESULTS_URL.replace('/br/br-','/zz/zz-');
+export function normalizeExterior(raw){if(raw.ele!=='6258'||raw.t!=='2'||raw.f!=='o'||raw.tpabr!=='uf'||raw.cdabr!=='zz')throw Error('Abrangência exterior inválida.');return normalizeVotes(raw,EXTERIOR_URL);}
+export function placeResultsUrl(id){if(!/^\d{5}$/.test(id))throw Error('Local inválido.');return EXTERIOR_URL.replace('/zz-c','/zz'+id+'-c');}
+export function normalizePlace(raw,id){const source=placeResultsUrl(id);if(raw.ele!=='6258'||raw.t!=='2'||raw.f!=='o'||raw.tpabr!=='mu'||raw.cdabr!==id)throw Error('Local de votação incorreto.');return {...normalizeVotes(raw,source),place:id};}
+export function municipalResultsUrl(uf,id){if(!STATE_CODES.includes(uf)||!/^\d{5}$/.test(id))throw Error('Município inválido.');return stateResultsUrl(uf).replace('/'+uf+'-c','/'+uf+id+'-c');}
+export function normalizeMunicipal(raw,uf,id){const source=municipalResultsUrl(uf,id);if(raw.ele!=='6258'||raw.t!=='2'||raw.f!=='o'||raw.tpabr!=='mu'||raw.cdabr!==id)throw Error('Município incorreto na fonte.');return {...normalizeVotes(raw,source),uf,municipality:id};}
 function normalizeVotes(raw, source) {
   const cargos = raw.carg?.filter(c => c.cd === '1');
   if (cargos?.length !== 1) throw new Error('Cargo de presidente ausente ou ambíguo.');
@@ -63,7 +69,9 @@ function normalizeVotes(raw, source) {
   const nullVotes = category('tvn','ptvn','votos nulos');
   const totalVotes = raw.v?.tv === undefined ? null : count(raw.v.tv,'total de votos');
   if (totalVotes !== null && ((blankVotes?.votes??0)+(nullVotes?.votes??0)>totalVotes)) throw Error('Contagem de brancos e nulos inconsistente.');
-  return {year: 2026, round: 2, progress: number(raw.s.pst, 'percentual de seções', 100), sections, totalSections, validVotes: count(raw.v?.vv, 'votos válidos'), blankVotes, nullVotes, totalVotes, updated: `${raw.dg} às ${raw.hg} (Brasília)`, generatedAt, checked: new Date().toISOString(), candidates, source, final: raw.tf === 's'};
+  const electorate = raw.e ? {eligible:count(raw.e.te,'eleitores aptos'),sectionElectors:count(raw.e.est,'eleitores nas seções totalizadas'),attended:count(raw.e.c,'comparecimento'),absent:count(raw.e.a,'abstenção')} : null;
+  if(electorate&&(electorate.sectionElectors>electorate.eligible||electorate.attended+electorate.absent>electorate.sectionElectors))throw Error('Eleitorado inconsistente.');
+  return {electorate, year: 2026, round: 2, progress: number(raw.s.pst, 'percentual de seções', 100), sections, totalSections, validVotes: count(raw.v?.vv, 'votos válidos'), blankVotes, nullVotes, totalVotes, updated: `${raw.dg} às ${raw.hg} (Brasília)`, generatedAt, checked: new Date().toISOString(), candidates, source, final: raw.tf === 's'};
 }
 export async function fetchResults() {
   const url = new URL(RESULTS_URL);

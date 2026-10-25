@@ -1,14 +1,14 @@
 import {mkdir, readFile, writeFile, rename} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
-import {normalize, normalizeState, stateResultsUrl, STATE_CODES, verifyJws, RESULTS_URL} from '../public/tse.mjs';
+import {normalize, normalizeState,normalizePlace,normalizeExterior,EXTERIOR_URL, stateResultsUrl, STATE_CODES, verifyJws, RESULTS_URL} from '../public/tse.mjs';
 import {GEO_URLS, normalizeGeography} from '../public/geography.mjs';
 
 const hash = text => createHash('sha256').update(text).digest('hex');
 async function readJson(path, fallback) {try {return JSON.parse(await readFile(path,'utf8'));} catch(e) {if(e.code === 'ENOENT') return fallback; throw e;}}
 async function atomic(path, value) {await writeFile(`${path}.tmp`,JSON.stringify(value)); await rename(`${path}.tmp`,path);}
 const sources = {national:RESULTS_URL, states:GEO_URLS.states, abroad:GEO_URLS.abroad};
-export const ALL_SOURCES = Object.freeze({...sources,...Object.fromEntries(STATE_CODES.map(uf=>[`uf-${uf}`,stateResultsUrl(uf)]))});
+export const ALL_SOURCES = Object.freeze({...sources,exterior:EXTERIOR_URL,...Object.fromEntries(STATE_CODES.map(uf=>[`uf-${uf}`,stateResultsUrl(uf)]))});
 export async function collect(directory, request=fetch, sourceUrls=ALL_SOURCES) {
   await mkdir(`${directory}/tokens`, {recursive:true});
   await mkdir(`${directory}/snapshots`, {recursive:true});
@@ -25,6 +25,13 @@ export async function collect(directory, request=fetch, sourceUrls=ALL_SOURCES) 
   const resources = {...previous.resources};
   const failures = {};
   let changed = false;
+  const world = await readJson(`${directory}/world-latest.json`,null);
+  try{const municipal = await readJson(`${directory}/municipios/latest.json`,null);
+  if(municipal?.kind==='municipal-bundle'&&/^[a-f0-9]{64}$/.test(municipal.hash)&&resources.municipalBundle?.hash!==municipal.hash){const text=await readFile(`${directory}/municipios/bundles/${municipal.hash}.json`,'utf8');if(hash(text)!==municipal.hash)throw Error('Integridade do conjunto municipal inválida.');resources.municipalBundle=municipal;changed=true;}}catch(e){failures.municipalBundle=e.message;}
+  try{const sections=await readJson(`${directory}/secoes/latest.json`,null);if(sections?.kind==='sections-bundle'&&/^[a-f0-9]{64}$/.test(sections.hash)&&resources.sectionsBundle?.hash!==sections.hash){const text=await readFile(`${directory}/secoes/bundles/${sections.hash}.json`,'utf8');if(hash(text)!==sections.hash)throw Error('Integridade do cadastro de seções inválida.');resources.sectionsBundle=sections;changed=true;}}catch(e){failures.sectionsBundle=e.message;}
+  for(const [key,record]of Object.entries(world?.resources??{})){
+    try{if(!/^city-\d{5}$/.test(key)||!/^[a-f0-9]{64}$/.test(record.hash))throw Error('Referência exterior inválida.');if(resources[key]?.hash===record.hash)continue;const token=await readFile(`${directory}/tokens/${record.hash}.jws`,'utf8');if(hash(token)!==record.hash)throw Error('Integridade exterior inválida.');const data=normalizePlace(await verifyJws(token),key.slice(5));if(data.generatedAt!==record.generatedAt||resources[key]&&data.generatedAt<resources[key].generatedAt)throw Error('Geração exterior inconsistente.');resources[key]=record;changed=true;}catch(e){failures[key]=e.message;}
+  }
   let nationalSummary;
   const pending = Object.entries(sourceUrls);
   async function capture() { while (pending.length) {
@@ -36,7 +43,7 @@ export async function collect(directory, request=fetch, sourceUrls=ALL_SOURCES) 
       const token = (await response.text()).trim();
       if (token.length > 5_000_000) throw Error('Arquivo excedeu o limite.');
       const raw = await verifyJws(token);
-      const data = key === 'national' ? normalize(raw) : key.startsWith('uf-') ? normalizeState(raw,key.slice(3)) : normalizeGeography(raw,key);
+      const data = key === 'national' ? normalize(raw) : key.startsWith('uf-') ? normalizeState(raw,key.slice(3)) : key==='exterior' ? normalizeExterior(raw) : normalizeGeography(raw,key);
       if (key === 'national') nationalSummary = {progress:data.progress,sections:data.sections,validVotes:data.validVotes};
       if (resources[key] && data.generatedAt < resources[key].generatedAt) throw Error('Versão oficial anterior à última arquivada.');
       const digest = hash(token);

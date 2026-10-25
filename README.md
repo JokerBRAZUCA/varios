@@ -79,3 +79,14 @@ Publicar **somente `public/`**, incluindo seus módulos e `assets/`. Não copiar
 A configuração exclusiva deste subdomínio fica em `/etc/nginx/sites-available/eleicaopresidente`. O backup original completo do Nginx fica em `/root/eleicao-nginx-backup-20261025`. As configurações dos demais sites não foram alteradas.
 
 A primeira versão foi preservada em `/var/www/eleicaopresidente`. Para recuperação da interface, é possível restaurar apenas o `root` do bloco HTTPS deste subdomínio para esse diretório, validar com `nginx -t` e recarregar Nginx. Não substitua a configuração global nem restaure todos os sites por causa deste painel. O diretório de desafios HTTP do Certbot deve continuar sendo o configurado na emissão original, para preservar a renovação.
+
+## Painel ampliado (outubro de 2026)
+A interface inclui notícias CNN Brasil/g1/UOL, sessões ativas nos últimos 60 segundos, eleitorado, participação parcial, gráfico histórico, percentuais no exterior e comparação nacional com marca de 50%. Todas as informações eleitorais selecionadas acompanham a captura da linha do tempo; notícias e acessos são atuais e identificados separadamente.
+
+Gere as malhas com `node scripts/build-maps.mjs` e `node scripts/build-municipalities.mjs`. O segundo usa a malha municipal do IBGE e o catálogo assinado do TSE. Há 5.570 geometrias e 5.571 localidades no catálogo; a cobertura é explicitada na interface. Azul/vermelho indicam a maior participação publicada, sem declarar vencedor.
+
+Os coletores `archive/municipal.mjs` e `archive/sections.py` são independentes do coletor nacional. O primeiro verifica assinaturas municipais e preserva os tokens e resumos imutáveis. O segundo baixa os arquivos oficiais de eleitorado por local e votação por seção, verifica o turno e publica conjuntos por UF com SHA-256. Seções agregadas usam a principal. Coordenadas inválidas são omitidas; os pontos de seções no mesmo local são separados visualmente e podem ser selecionados pela lista.
+
+O arquivo consolidado por seção pode ser publicado somente ao fim do turno. Enquanto não houver linhas do segundo turno, os pontos ficam neutros e a interface informa a ausência. Os boletins individuais do aplicativo TSE não são decodificados por este coletor. O sistema não usa votos do primeiro turno para preencher essa lacuna. Na linha do tempo, detalhes que não estavam arquivados na captura permanecem indisponíveis.
+
+`live/server.mjs` mantém notícias em cache e presença em memória, com sessões aleatórias e expiração de 60 segundos, sem nomes ou IPs no contador. Os títulos são links para os veículos e não são relacionados à captura histórica. Confira os diretórios do código e as unidades de serviço antes de uma nova instalação; o ambiente publicado utiliza versões preservadas e troca apenas a raiz HTTPS deste subdomínio.
