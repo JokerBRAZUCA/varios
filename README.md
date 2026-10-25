@@ -6,13 +6,16 @@ Painel independente da apuração presidencial de 2026 (eleição 6258, cargo 1)
 - Consulta direta do navegador ao TSE, com verificação Ed25519 dos arquivos JWS. TLS e assinaturas não são ignorados.
 - Mapa do Brasil com 27 UFs; mapa-múndi com países e territórios agrupando os 186 locais de votação no exterior presentes no catálogo verificado.
 - As cores mostram **seções totalizadas**, sem atribuir cores a candidatos ou projetar resultados. Percentuais por país são ponderados pela soma das seções.
-- Linha do tempo logo abaixo dos dados dos candidatos. Uma seleção carrega a captura inteira: candidatos, votos, percentuais, seções, mapas e respectivos horários. O botão Ao vivo retorna às consultas atuais.
+- Clique em uma UF para ver os percentuais e votos de cada candidato abaixo da totalização. O arquivo de votos tem seu próprio horário e assinatura; se ainda estiver zerado ou atrasado em relação ao mapa, isso fica explícito. Os valores não são inferidos do progresso das seções.
+- Fotos oficiais do TSE nos cartões nacionais e nas UFs, associadas pelo identificador de candidatura do JWS verificado. Cópias das imagens ficam em `public/assets/candidates/`, com procedência em `sources.json`; falhas de imagem exibem iniciais sem afetar os resultados.
+- Linha do tempo logo abaixo dos dados dos candidatos. O contador distingue capturas de versões nacionais diferentes; capturas parciais são identificadas. Se duas capturas preservam o mesmo arquivo nacional, os percentuais permanecem iguais. Uma seleção carrega a captura inteira: candidatos, votos, percentuais, seções, mapas e respectivos horários. O botão Ao vivo retorna às consultas atuais.
 - A reprodução percorre apenas capturas reais. Não há interpolação nem reconstrução de versões anteriores à primeira captura.
 - O botão Ativar som habilita um tom sintetizado inspirado na confirmação da urna. O navegador exige interação para liberar áudio. Uma nova versão verificada pode tocar; consultas idênticas, abertura inicial e reprodução do histórico ficam silenciosas.
 - Se o TSE falhar, a interface consulta o arquivo da VPS e verifica novamente hash e assinatura. O modo BACKUP e o horário de captura ficam visíveis. Sem backup acessível, preserva os últimos dados já recebidos na sessão; nunca inventa resultados.
 
 ## Fontes
 - Nacional: https://resultados.tse.jus.br/oficial/ele2026/6258/dados/br/br-c0001-e006258-u.jws
+- Votos por UF: `https://resultados.tse.jus.br/oficial/ele2026/6258/dados/{uf}/{uf}-c0001-e006258-u.jws`, com código de duas letras em minúsculas.
 - Progresso por UF e consolidado exterior: https://resultados.tse.jus.br/oficial/ele2026/6258/dados/br/br-e006258-ab.jws
 - Progresso dos locais no exterior: https://resultados.tse.jus.br/oficial/ele2026/6258/dados/zz/zz-e006258-ab.jws
 - Catálogo oficial de localidades: https://resultados.tse.jus.br/oficial/ele2026/6258/config/mun-e006258-cm.jws
@@ -30,6 +33,7 @@ A interface permanece estática e as consultas ao vivo continuam diretas ao TSE.
 - Código do coletor: `/opt/eleicaopresidente-archive/archive/collect.mjs`, com seus módulos em `../public/`.
 - Dados: `/var/lib/eleicaopresidente-archive/public/`.
 - Serviço: `eleicaopresidente-archive.service`; agendamento: `eleicaopresidente-archive.timer`, com intervalo de 30 segundos após cada execução.
+- São consultadas as três fontes de acompanhamento e os 27 arquivos de votos das UFs, com no máximo quatro consultas simultâneas. O navegador consulta apenas a UF selecionada; no histórico, carrega o arquivo referenciado na captura. Capturas anteriores à inclusão dos arquivos de UF indicam a ausência, sem usar dados atuais.
 - Arquivos JWS são preservados por SHA-256. Capturas referenciam os últimos arquivos válidos de cada fonte e preservam o horário de geração de cada um. Repetições não geram cópias adicionais.
 - Falha de rede, HTTP de erro, assinatura inválida e regressão de geração não substituem o último arquivo válido.
 - `latest.json` informa a última tentativa, referências válidas e falhas; `index.json` lista capturas com novas versões; `snapshots/` e `tokens/` preservam conteúdo.
@@ -61,9 +65,9 @@ test -z "$(git status --porcelain)"
 git pull --ff-only origin main
 node scripts/build-maps.mjs
 node --test tests/tse.test.mjs tests/archive.test.mjs
-backup_dir=$(mktemp -d /root/eleicaopresidente-v2-backup-XXXXXXXX)
-cp -a /var/www/eleicaopresidente-v2/. "$backup_dir/"
-cp -a public/. /var/www/eleicaopresidente-v2/
+backup_dir=$(mktemp -d /root/eleicaopresidente-v4-backup-XXXXXXXX)
+cp -a /var/www/eleicaopresidente-v4/. "$backup_dir/"
+cp -a public/. /var/www/eleicaopresidente-v4/
 printf 'Backup anterior: %s\n' "$backup_dir"
 )
 ```

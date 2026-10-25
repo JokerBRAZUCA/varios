@@ -1,4 +1,4 @@
-import {verifyJws, normalize} from './tse.mjs';
+import {verifyJws, normalize, normalizeState} from './tse.mjs';
 import {normalizeGeography} from './geography.mjs';
 
 export async function archiveJson(path) {
@@ -17,7 +17,7 @@ export async function archivedResource(resources, key) {
   const digest = await digestToken(token);
   if (digest !== record.hash) throw Error('A integridade do arquivo de segurança não foi confirmada.');
   const raw = await verifyJws(token);
-  const data = key === 'national' ? normalize(raw) : normalizeGeography(raw,key);
+  const data = key === 'national' ? normalize(raw) : key.startsWith('uf-') ? normalizeState(raw,key.slice(3)) : normalizeGeography(raw,key);
   if (data.generatedAt !== record.generatedAt) throw Error('Horário do arquivo de segurança inconsistente.');
   return {data,raw,record,revision:digest,origin:'backup'};
 }

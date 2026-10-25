@@ -28,12 +28,25 @@ function count(value, label) {
 }
 export function normalize(raw) {
   if (raw.ele !== '6258' || raw.t !== '2' || raw.f !== 'o' || raw.tpabr !== 'br' || raw.cdabr !== 'br') throw new Error('A fonte não corresponde ao segundo turno presidencial de 2026 no Brasil.');
+  return normalizeVotes(raw, RESULTS_URL);
+}
+export const STATE_CODES = Object.freeze('ac al ap am ba ce df es go ma mt ms mg pa pb pr pe pi rj rn rs ro rr sc sp se to'.split(' '));
+export function stateResultsUrl(uf) {
+  if (!STATE_CODES.includes(uf)) throw Error('UF inválida.');
+  return RESULTS_URL.replace('/br/br-', `/${uf}/${uf}-`);
+}
+export function normalizeState(raw, uf) {
+  const source = stateResultsUrl(uf);
+  if (raw.ele !== '6258' || raw.t !== '2' || raw.f !== 'o' || raw.tpabr !== 'uf' || raw.cdabr !== uf) throw Error('O resultado não corresponde à UF selecionada.');
+  return {...normalizeVotes(raw, source), uf};
+}
+function normalizeVotes(raw, source) {
   const cargos = raw.carg?.filter(c => c.cd === '1');
   if (cargos?.length !== 1) throw new Error('Cargo de presidente ausente ou ambíguo.');
   const candidates = [];
   for (const group of cargos[0].agr ?? []) for (const party of group.par ?? []) for (const candidate of party.cand ?? []) {
     if (typeof candidate.nmu !== 'string' || !candidate.nmu.trim()) throw new Error('Nome do candidato ausente na fonte.');
-    candidates.push({name: candidate.nmu, party: party.sg ?? '', votes: count(candidate.vap, 'votos do candidato'), percent: number(candidate.pvap, 'percentual do candidato', 100)});
+    candidates.push({id:/^\d{12}$/.test(candidate.sqcand ?? '')?candidate.sqcand:null, name: candidate.nmu, party: party.sg ?? '', votes: count(candidate.vap, 'votos do candidato'), percent: number(candidate.pvap, 'percentual do candidato', 100)});
   }
   if (!candidates.length) throw new Error('Ainda não há candidatos na resposta oficial.');
   const sections = count(raw.s?.st, 'seções totalizadas');
@@ -44,7 +57,7 @@ export function normalize(raw) {
   // The official file gives Brazilian election time (UTC−03:00).
   const generatedAt = Date.parse(`${date[3]}-${date[2]}-${date[1]}T${raw.hg}-03:00`);
   if (!Number.isFinite(generatedAt)) throw new Error('Horário oficial inválido.');
-  return {year: 2026, round: 2, progress: number(raw.s.pst, 'percentual de seções', 100), sections, totalSections, validVotes: count(raw.v?.vv, 'votos válidos'), updated: `${raw.dg} às ${raw.hg} (Brasília)`, generatedAt, checked: new Date().toISOString(), candidates, source: RESULTS_URL, final: raw.tf === 's'};
+  return {year: 2026, round: 2, progress: number(raw.s.pst, 'percentual de seções', 100), sections, totalSections, validVotes: count(raw.v?.vv, 'votos válidos'), updated: `${raw.dg} às ${raw.hg} (Brasília)`, generatedAt, checked: new Date().toISOString(), candidates, source, final: raw.tf === 's'};
 }
 export async function fetchResults() {
   const url = new URL(RESULTS_URL);

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile,mkdtemp} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
-import {verifyJws} from '../public/tse.mjs';
+import {verifyJws,normalize,normalizeState,stateResultsUrl} from '../public/tse.mjs';
 import {normalizeGeography} from '../public/geography.mjs';
 import {UpdateSound} from '../public/sound.mjs';
 import {collect} from '../archive/collect.mjs';
@@ -30,11 +30,12 @@ test('archive deduplicates, rejects tampered data, and preserves valid backups t
  const dir=await mkdtemp(join(tmpdir(),'eleicao-archive-test-'));
  const tokens=Object.fromEntries(await Promise.all(['national','states','abroad'].map(async k=>[k,await fixture(k)])));
  const request=async url=>new Response(tokens[String(url).includes('br-c0001')?'national':String(url).includes('/dados/br/')?'states':'abroad']);
- const first=await collect(dir,request);assert.equal(first.index.entries.length,1);assert.equal(Object.keys(first.resources).length,3);assert.deepEqual(first.failures,{});
- const same=await collect(dir,request);assert.equal(same.index.entries.length,1);assert.equal(same.changed,false);
- const invalid=await collect(dir,async()=>new Response(tokens.national.replace(/.$/,'!')));
+ const coreSources={national:'https://test/dados/br/br-c0001',states:'https://test/dados/br/states',abroad:'https://test/abroad'};
+ const first=await collect(dir,request,coreSources);assert.equal(first.index.entries.length,1);assert.equal(Object.keys(first.resources).length,3);assert.deepEqual(first.failures,{});
+ const same=await collect(dir,request,coreSources);assert.equal(same.index.entries.length,1);assert.equal(same.changed,false);
+ const invalid=await collect(dir,async()=>new Response(tokens.national.replace(/.$/,'!')),coreSources);
  assert.equal(invalid.changed,false);assert.equal(Object.keys(invalid.failures).length,3);assert.deepEqual(invalid.resources,first.resources);
- const outage=await collect(dir,async()=>{throw Error('Simulated connection failure');});
+ const outage=await collect(dir,async()=>{throw Error('Simulated connection failure');},coreSources);
  assert.deepEqual(outage.resources,first.resources);assert.equal(outage.index.entries.length,1);
  for(const ref of Object.values(first.resources))await verifyJws(await readFile(join(dir,'tokens',`${ref.hash}.jws`),'utf8'));
 });
@@ -47,4 +48,28 @@ test('confirmation sound only fires once for new versions after explicit activat
  sound.observe({national:null});assert.equal(count,1);
  sound.observe({national:'two'});assert.equal(count,1);
  sound.enabled=false;sound.observe({national:'three'});assert.equal(count,1);
+});
+
+test('state votes validate the exact UF and archive independently from map progress',async()=>{
+ const token=await fixture('am');const raw=await verifyJws(token);const d=normalizeState(raw,'am');
+ assert.equal(d.uf,'am');assert.equal(d.totalSections,8157);assert.equal(d.validVotes,0);
+ assert.throws(()=>normalize(raw));assert.throws(()=>normalizeState(raw,'sp'));assert.throws(()=>stateResultsUrl('../br'));
+ const dir=await mkdtemp(join(tmpdir(),'eleicao-state-test-'));
+ const saved=await collect(dir,async()=>new Response(token),{'uf-am':stateResultsUrl('am')});
+ assert.equal(saved.index.entries[0].complete,false);assert.ok(saved.resources['uf-am']);
+ const unchanged=await collect(dir,async()=>{throw Error('Offline');},{'uf-am':stateResultsUrl('am')});
+ assert.deepEqual(unchanged.resources,saved.resources);assert.equal(unchanged.index.entries.length,1);
+});
+
+test('timeline distinguishes captures from national versions and identifies missing map sources',async()=>{
+ const {timelineSummary}=await import('../public/timeline.mjs');
+ const first={nationalHash:'a'.repeat(64),complete:false,availableSources:['national']};
+ const second={nationalHash:'a'.repeat(64),complete:true,availableSources:['national','states','abroad']};
+ const initial=timelineSummary([first,second],0);
+ assert.equal(initial.versions,1);assert.equal(initial.sameNational,true);assert.equal(initial.partial,true);
+ assert.match(initial.count,/2 capturas · 1 versão nacional/);
+ assert.match(initial.note,/percentuais dos candidatos são iguais/);
+ assert.match(initial.note,/mapas ainda não estavam arquivados/);
+ const changed=timelineSummary([second,{...second,nationalHash:'b'.repeat(64)}],1);
+ assert.equal(changed.versions,2);assert.equal(changed.sameNational,false);assert.equal(changed.partial,false);
 });
