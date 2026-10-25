@@ -57,4 +57,4 @@ Os testes unitários usam candidatos fictícios isolados e não fazem parte dos 
 3. Em **Actions → Publicar dashboard → Run workflow**, execute o workflow incluído.
 4. Abra o endereço HTTPS informado pelo GitHub Pages e confirme que o painel mostra “assinatura digital verificada”.
 
-O workflow é manual: não publica automaticamente ao alterar código. Nenhuma publicação, envio ao GitHub ou ativação de Pages foi realizada pelo assistente. A disponibilidade de Pages depende do plano e da visibilidade do repositório. Não há servidor de aplicação a manter.
+O workflow é manual: não publica automaticamente ao alterar código. O código foi enviado à branch `main`. A ativação do Pages e a execução do workflow ainda estão pendentes: o ambiente bloqueou o acesso à API do GitHub. Nenhuma publicação pública foi confirmada. A disponibilidade de Pages depende do plano e da visibilidade do repositório. Não há servidor de aplicação a manter.
