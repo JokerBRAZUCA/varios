@@ -138,6 +138,22 @@ input[type=text]:focus{outline:3px solid var(--sky);outline-offset:2px}
 #dash:active{transform:translate(3px,3px);box-shadow:1px 1px 0 var(--ink)}
 #hint{position:absolute;left:calc(22px + env(safe-area-inset-left,0px));bottom:calc(36px + env(safe-area-inset-bottom,0px));color:var(--paper);font-weight:800;font-size:13px;text-shadow:1px 1px 0 var(--ink);opacity:.9}
 
+/* chat */
+#feed{position:absolute;left:max(12px,env(safe-area-inset-left,0px));bottom:calc(70px + env(safe-area-inset-bottom,0px));width:min(60vw,260px);display:flex;flex-direction:column;gap:3px;pointer-events:none}
+#feed div{background:rgba(27,26,34,.72);color:#fff;font-size:13px;font-weight:700;line-height:1.3;padding:4px 8px;border-radius:8px;overflow-wrap:anywhere}
+#feed div.fila{opacity:.8;font-style:italic}
+#feed b{font-weight:800}
+#chatSheet{position:fixed;z-index:30;left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));max-width:460px;margin:0 auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+.sheetHead{display:flex;align-items:center;gap:8px}
+.sheetHead b{font-family:var(--display);font-size:18px;font-weight:400;flex:1}
+.sheetHead .btn{width:auto}
+.quick{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.quick button{font:800 14px var(--body);border:2px solid var(--ink);border-radius:10px;padding:9px 8px;background:#f4f2f8;color:var(--ink);cursor:pointer;touch-action:manipulation}
+.quick button:active{background:var(--sun)}
+#chatForm{gap:8px}
+#chatForm input{font-size:16px;padding:10px 12px}
+#chatForm .btn{flex:none;width:auto}
+
 /* cartão de rodada */
 #card{position:fixed;inset:0;z-index:15;display:flex;align-items:center;justify-content:center;pointer-events:none;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
@@ -176,7 +192,9 @@ input[type=text]:focus{outline:3px solid var(--sky);outline-offset:2px}
       <div class="watch" id="watch">4 na fila</div>
     </div>
   </div>
-  <div class="reacts" aria-label="Reações">
+  <div id="feed" hidden aria-live="polite"></div>
+  <div class="reacts" aria-label="Chat e reações">
+    <button class="chip" id="chatBtn" aria-label="Abrir chat">💬</button>
     <button class="chip" data-r="😂" aria-label="Rir">😂</button>
     <button class="chip" data-r="🔥" aria-label="Fogo">🔥</button>
     <button class="chip" data-r="😱" aria-label="Susto">😱</button>
@@ -187,6 +205,13 @@ input[type=text]:focus{outline:3px solid var(--sky);outline-offset:2px}
 </div>
 
 <div id="card" hidden></div>
+
+<div id="chatSheet" class="sticker" hidden>
+  <div class="sheetHead"><b>Chat</b><button class="btn alt small" id="chatToggle" type="button">Esconder chat</button><button class="chip" id="chatClose" type="button" aria-label="Fechar chat">✕</button></div>
+  <div class="quick" id="quick"></div>
+  <form id="chatForm" class="row"><input type="text" id="chatIn" maxlength="60" placeholder="Escreva e manda…" autocomplete="off" aria-label="Mensagem"><button class="btn small" type="submit">Enviar</button></form>
+  <p class="rules">Palavrões e links são bloqueados automaticamente.</p>
+</div>
 
 <!-- LOBBY -->
 <section class="screen" id="lobby">
@@ -449,7 +474,7 @@ const SFX={
 let players=[],me=null,nextId=0;
 function makePlayer(name,color,bot){
   return{id:nextId++,name,color,bot,x:0,y:0,vx:0,vy:0,r:14,stun:0,spin:0,dashT:0,dashCd:0,lookX:0,lookY:1,
-    score:0,total:0,passCd:0,arrived:false,knockImm:0,wob:Math.random()*6,
+    score:0,total:0,passCd:0,chatCd:rand(1,4),say:null,arrived:false,knockImm:0,wob:Math.random()*6,
     skill:bot?rand(.8,.95):1,brain:{t:0,dx:0,dy:0,goal:null,goalT:0,distract:0,tile:null}};
 }
 function spawnAll(area){
@@ -513,6 +538,7 @@ function knock(v,nx,ny,att){
   if(v.knockImm>0)return;
   v.vx=nx*440+att.vx*.25;v.vy=ny*440+att.vy*.25;v.stun=.8;v.knockImm=.35;att.dashT=0;att.vx*=.25;att.vy*=.25;
   ftext(v.x,v.y-26,pick(['TOMBO!','SAI DA FRENTE!','OPA!','VAPT!','LÁ VAI!']),'#ffd23f');
+  botSay(att,'knockA',.45);botSay(v,'knockV',.55);
   for(let i=0;i<10;i++)part(v.x,v.y,rand(-160,160),rand(-160,160),pick(['#fff','#ffd23f',v.color]),rand(2,5),.5);
   if(v===me||att===me){SFX.knock();shake(6)}
 }
@@ -554,7 +580,7 @@ const MODES={
     contact(a,b){
       const h=this.holder;if(!h||this.wait>0||h.passCd>0)return;
       const to=a===h?b:b===h?a:null;if(!to)return;
-      this.holder=to;to.passCd=.7;ftext(to.x,to.y-30,'PEGA!','#ff4f8b');
+      this.holder=to;to.passCd=.7;ftext(to.x,to.y-30,'PEGA!','#ff4f8b');botSay(h,'passA',.5);botSay(to,'passV',.6);
       if(to===me||h===me){SFX.pass();toast(to===me?'Você pegou a bomba! Passa pra frente!':`Passou pra ${to.name}!`)}
     },
     explode(){
@@ -563,6 +589,7 @@ const MODES={
       ftext(h.x,h.y-30,'BUM!','#ff8a1f',1.6);
       if(near(h)){boom();shake(h===me?16:8)}
       toast(h===me?'BUM! Você explodiu (-8)':`${h.name} explodiu!`);
+      botSay(h,'boomH',.8);for(const o of players)if(o!==h)botSay(o,'boomO',.18);
       this.last=h;this.holder=null;this.wait=1.4;
     },
     goal(b){
@@ -586,6 +613,7 @@ const MODES={
           if(t.owner===p.id)continue;
           const cx=clamp(p.x,t.x,t.x+t.w),cy=clamp(p.y,t.y,t.y+t.h);
           if(Math.hypot(p.x-cx,p.y-cy)<=p.r+5){
+            if(t.owner>=0&&Math.random()<.15)botSay(p,'picha',.6);
             t.owner=p.id;t.t=1;
             for(let i=0;i<5;i++)part(cx,cy,rand(-90,90),rand(-90,90),p.color,rand(2,5),.45);
             if(p===me&&this.snd<=0){SFX.paint();this.snd=.05}
@@ -620,6 +648,7 @@ const MODES={
       this.first=false;this.target=t;this.arrived=0;this.timer=-1;
       for(const p of players)p.arrived=false;
       toast(`Corre pra ${t.loja.name}!`);if(me)SFX.go();
+      botSay(pick(players.filter(p=>p.bot)),'target',.5);
     },
     update(dt){
       const d=this.target.door,pts=[5,3,2,1];
@@ -627,7 +656,7 @@ const MODES={
         if(Math.hypot(p.x-d.x,p.y-d.y)<38){p.arrived=true;const v=pts[this.arrived]||0;this.arrived++;p.score+=v;
           if(v)ftext(p.x,p.y-30,`+${v}`,'#ffd23f',1.3);
           if(p===me){SFX.score();toast(v?`Chegou em ${this.arrived}º! +${v}`:'Chegou! Mas sem pontos dessa vez')}
-          if(this.timer<0)this.timer=5;}}
+          if(this.timer<0){this.timer=5;botSay(p,'first',.9)}}}
       if(this.arrived>=4)this.timer=Math.min(this.timer,.8);
       if(this.timer>0){this.timer-=dt;if(this.timer<=0)this.newTarget()}
     },
@@ -714,9 +743,11 @@ function endRound(){
     <ol class="mini">${ranked.slice(0,3).map((p,i)=>`<li><span>${i+1}º</span><span>${esc(p.name)}</span><span>${Math.max(0,Math.round(p.score))} ${mode.unit}</span></li>`).join('')}</ol>
     <p class="tip">Você ficou em <b>${myPos}º</b> nesta rodada.</p>`);
   SFX.score();
+  botSay(ranked[0],'win',.9);botSay(ranked[ranked.length-1],'lose',.9);botSay(ranked[ranked.length-2],'lose',.4);
 }
 function endMatch(){
   state='results';$('#hud').hidden=true;$('#card').hidden=true;
+  feed=[];pending=[];renderFeed();closeChat();
   const ranked=players.slice().sort((a,b)=>b.total-a.total);const pos=ranked.indexOf(me)+1;myTotal=me.total;
   $('#resTitle').textContent=pos===1?'Você é o rei do rolê!':`Você ficou em ${pos}º`;
   const ol=$('#rank');ol.innerHTML='';
@@ -767,6 +798,7 @@ function frame(now){
   requestAnimationFrame(frame);
 }
 function update(dt){
+  if(state==='play'||state==='intro'||state==='roundEnd')chatTick(dt);
   if(toastT>0){toastT-=dt;if(toastT<=0)$('#toast').classList.add('off')}
   watchT-=dt;if(watchT<=0){watchT=rand(5,9);watchers=clamp(watchers+Math.round(rand(-1,1.6)),2,9);$('#watch').textContent=`${watchers} na fila`}
   if(state==='intro'){
@@ -906,6 +938,7 @@ function render(){
   const sorted=players.slice().sort((a,b)=>a.y-b.y);
   for(const p of sorted){g.fillStyle='rgba(0,0,0,.25)';g.beginPath();g.ellipse(p.x,p.y+p.r*.8,p.r*.95,p.r*.4,0,0,7);g.fill()}
   for(const p of sorted)drawPlayer(g,p);
+  for(const p of sorted)drawBubble(g,p);
   for(const q of parts){g.globalAlpha=clamp(q.life/q.max,0,1);g.fillStyle=q.color;g.beginPath();g.arc(q.x,q.y,q.size,0,7);g.fill()}
   g.globalAlpha=1;
   for(const t of texts){const k=t.t/1.1;g.globalAlpha=1-k*k;const s=(14+8*Math.min(1,t.t*6))*t.scale;
@@ -978,10 +1011,92 @@ function drawEdgeMarker(g,mk){
   g.fillStyle='#1b1a22';g.textAlign='center';g.textBaseline='middle';g.fillText(lbl,lx,ly+1);
 }
 
+/* ================= chat ================= */
+const ZOEIRA={
+  knockA:['SAI DA FRENTE!','foi mal kkkk','tchau 👋','vem tranquilo','ISSO É CHÃO','nem vi você aí'],
+  knockV:['ei!!','covardia 😤','vou lembrar disso','me empurrou??','kkkk ok','tá bom então','revanche!'],
+  boomH:['NÃÃÃO','era pra ter passado 😭','morri kkkk','eu tava quase!','alguém anotou a placa?'],
+  boomO:['KKKKKKK','voou longe','BUM 💥','rip','essa doeu','print!!'],
+  passA:['toma!','presente pra você 🎁','é tua agora','fica com Deus'],
+  passV:['NÃO','volta aqui!!','sério?','ah não 😭','quem pediu??'],
+  picha:['esse muro é meu','pichei por cima kkk','arte moderna 🎨','assinado: eu'],
+  first:['PRIMEIRO!!','chegueeei','lentos demais','tem desconto pra quem chega em 1º?'],
+  target:['onde fica isso??','bora!!','tô perdido kkk','sigam-me','é do lado da praça?'],
+  win:['GG 😎','ganhei, aceitem','fácil','respeita'],
+  lose:['roubado','lag','próxima eu ganho','foi o controle'],
+  idle:['alguém joga sério aqui?','quem é o rosa? 👀','manda o link pros amigos','esse mapa é enorme','gg','que zona kkkk','quem é a Ju?','ANA RESPONDE O CARA','Marquinhos volta pfv','alguém viu a padaria?'],
+  reply:['kkkkk','verdade','fala sério','quem é você? kkk','concordo','📸 printei','isso aí'],
+  fila:['me deixa entrar!!','próxima sou eu','👀','bora logo','assistindo de camarote'],
+};
+const QUICK=['KKKKKKK','sai da frente!','vem tranquilo','gg','covardia!','vou pichar tudo','me ajuda aí','bora mais uma'];
+const BAD=['porra','caralho','merda','puta','fdp','buceta','arrombad','viado','bicha','macaco','corno','piroca','vagabund','cuzao','foder','fuder','transa','nude','pinto','xoxota','punheta','retardad'];
+const fold=t=>t.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+let chatOn=store.get('role_chat')!==false,feed=[],pending=[],chatGap=0;
+function clean(t){
+  t=String(t).normalize('NFC').replace(/\s+/g,' ').trim().slice(0,60);
+  t=t.replace(/(https?:\/\/|www\.)\S*/gi,'[link]').replace(/\b\S+\.(com|net|org|br|io|gg|app|xyz)\S*/gi,'[link]');
+  const low=fold(t);let out=t;
+  if(low.length===t.length)for(const w of BAD){let i=low.indexOf(w);while(i>=0){out=out.slice(0,i)+'★'.repeat(w.length)+out.slice(i+w.length);i=low.indexOf(w,i+w.length)}}
+  return out;
+}
+function say(p,text,who){
+  text=clean(text);if(!text)return;
+  if(p)p.say={text,t:3};
+  feed.push({name:p?p.name:who,color:p?p.color:'#c9c3d6',text,fila:!p,t:0});
+  if(feed.length>5)feed.shift();renderFeed();
+}
+function botSay(p,key,prob=.5){
+  if(!p||!p.bot||!chatOn||p.chatCd>0||Math.random()>prob)return;
+  p.chatCd=rand(4,8);pending.push({p,text:pick(ZOEIRA[key]),t:rand(.3,1.1)});
+}
+function meSay(text){
+  if(!me||!String(text).trim())return;say(me,text);SFX.bump();
+  if(chatOn&&Math.random()<.7){const b=pick(players.filter(p=>p.bot));if(b){b.chatCd=0;botSay(b,'reply',1)}}
+}
+function chatTick(dt){
+  for(const p of players){p.chatCd-=dt;if(p.say){p.say.t-=dt;if(p.say.t<=0)p.say=null}}
+  chatGap-=dt;
+  for(const q of pending)q.t-=dt;
+  const ready=pending.filter(q=>q.t<=0);pending=pending.filter(q=>q.t>0);
+  for(const q of ready){
+    if(chatGap>0){q.t=chatGap+.15;pending.push(q);continue}
+    if(!q.p||players.includes(q.p)){say(q.p,q.text,q.who);chatGap=.6}
+  }
+  const n=feed.length;for(const f of feed)f.t+=dt;feed=feed.filter(f=>f.t<9);if(feed.length!==n)renderFeed();
+  if(state==='play'&&chatOn){
+    if(Math.random()<dt*.18)botSay(pick(players.filter(p=>p.bot)),'idle',.8);
+    if(Math.random()<dt*.05)pending.push({p:null,who:pick(NAMES)+' (fila)',text:pick(ZOEIRA.fila),t:0});
+  }
+}
+function renderFeed(){
+  const el=$('#feed');el.hidden=!chatOn||!feed.length;el.innerHTML='';
+  for(const f of feed){const d=document.createElement('div');if(f.fila)d.className='fila';
+    const b=document.createElement('b');b.textContent=f.name;b.style.color=f.color;d.append(b,document.createTextNode(' '+f.text));el.appendChild(d)}
+}
+function drawBubble(g,p){
+  if(!chatOn||!p.say)return;g.globalAlpha=Math.min(1,p.say.t/.3);
+  g.font=`800 12px ${BODY}`;let t=p.say.text;
+  if(g.measureText(t).width>150){while(g.measureText(t+'…').width>150&&t.length>2)t=t.slice(0,-1);t+='…'}
+  const w=g.measureText(t).width+16,h=24,x=p.x-w/2,y=p.y-p.r-(modeKey==='batata'&&mode&&mode.holder===p?66:46);
+  g.fillStyle='#fff';g.strokeStyle='#1b1a22';g.lineWidth=2;rr(g,x,y,w,h,10);g.fill();g.stroke();
+  g.beginPath();g.moveTo(p.x-6,y+h-1.5);g.lineTo(p.x,y+h+7);g.lineTo(p.x+6,y+h-1.5);g.closePath();g.fill();
+  g.beginPath();g.moveTo(p.x-6,y+h);g.lineTo(p.x,y+h+7);g.lineTo(p.x+6,y+h);g.stroke();
+  g.fillStyle='#1b1a22';g.textAlign='center';g.textBaseline='middle';g.fillText(t,p.x,y+h/2+.5);g.globalAlpha=1;
+}
+const sheet=$('#chatSheet');
+QUICK.forEach(q=>{const b=document.createElement('button');b.type='button';b.textContent=q;b.addEventListener('click',()=>{meSay(q);closeChat()});$('#quick').appendChild(b)});
+function openChat(){sheet.hidden=false;joy.active=false;joy.id=null;input.x=input.y=0;syncChatToggle()}
+function closeChat(){sheet.hidden=true;$('#chatIn').blur()}
+function syncChatToggle(){$('#chatToggle').textContent=chatOn?'Esconder chat':'Mostrar chat';$('#quick').hidden=!chatOn;$('#chatForm').hidden=!chatOn}
+$('#chatBtn').addEventListener('click',()=>sheet.hidden?openChat():closeChat());
+$('#chatClose').addEventListener('click',closeChat);
+$('#chatForm').addEventListener('submit',e=>{e.preventDefault();const v=$('#chatIn').value;if(v.trim()){meSay(v);$('#chatIn').value='';closeChat()}});
+$('#chatToggle').addEventListener('click',()=>{chatOn=!chatOn;store.set('role_chat',chatOn);if(!chatOn)pending=[];syncChatToggle();renderFeed()});
+
 /* ================= reações e plateia ================= */
 let floaters=[];
 function spectatorReact(){floaters.push({r:pick(['😂','🔥','😱','👏','💀','🤣']),x:VW-rand(90,150),y:VH-rand(170,240),t:0,who:pick(NAMES)})}
-document.querySelectorAll('.reacts .chip').forEach(b=>b.addEventListener('click',()=>{floaters.push({r:b.dataset.r,x:VW/2+rand(-30,30),y:VH-170,t:0,big:true,who:'você'});SFX.bump()}));
+document.querySelectorAll('.reacts .chip[data-r]').forEach(b=>b.addEventListener('click',()=>{floaters.push({r:b.dataset.r,x:VW/2+rand(-30,30),y:VH-170,t:0,big:true,who:'você'});SFX.bump()}));
 
 /* ================= controles ================= */
 const joy={active:false,id:null,ox:0,oy:0};
@@ -1000,7 +1115,8 @@ const endJoy=e=>{if(e.pointerId===joy.id){joy.active=false;joy.id=null;input.x=i
 cv.addEventListener('pointerup',endJoy);cv.addEventListener('pointercancel',endJoy);
 $('#dash').addEventListener('pointerdown',e=>{e.preventDefault();audio();if(me&&state==='play')dash(me)});
 const keys={};
-addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;keys[e.code]=true;if((e.code==='Space'||e.code==='KeyJ')&&me&&state==='play'){e.preventDefault();dash(me)}keyInput()});
+addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;
+  if(e.code==='Enter'&&me&&state==='play'&&$('#chatSheet').hidden){e.preventDefault();openChat();$('#chatIn').focus();return}keys[e.code]=true;if((e.code==='Space'||e.code==='KeyJ')&&me&&state==='play'){e.preventDefault();dash(me)}keyInput()});
 addEventListener('keyup',e=>{keys[e.code]=false;keyInput()});
 function keyInput(){if(joy.active)return;let x=(keys.ArrowRight||keys.KeyD?1:0)-(keys.ArrowLeft||keys.KeyA?1:0),y=(keys.ArrowDown||keys.KeyS?1:0)-(keys.ArrowUp||keys.KeyW?1:0);const m=Math.hypot(x,y)||1;input.x=x/m;input.y=y/m}
 $('#mute').textContent=muted?'🔇':'🔊';

@@ -8,6 +8,7 @@ Este diretório é independente do painel da eleição. Não compartilha arquivo
 - Uma página estática (`public/index.html`), sem dependências nem build. Fontes vêm do Google Fonts.
 - Modos: Batata Quente, Picha a Cidade e Corre Pra Loja. Três rodadas por partida.
 - Os outros jogadores são bots. A fila de espera e a plateia são simuladas.
+- Chat com balões sobre os bonecos e feed no canto. Os bots comentam explosões, empurrões, pichações e chegadas, e respondem ao jogador. Frases prontas com um toque, campo livre com filtro de palavrões e links, e botão para esconder o chat (a escolha fica salva no navegador). O filtro é uma lista simples; com jogadores reais será preciso moderação no servidor.
 - Os anúncios mostrados são negócios e recados fictícios. A tela "Coloque seu recado na cidade" salva o anúncio só no navegador de quem enviou e não cobra nada.
 
 ## Rodar localmente
