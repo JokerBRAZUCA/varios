@@ -207,7 +207,7 @@ input[type=text]:focus{outline:3px solid var(--sky);outline-offset:2px}
 <div id="card" hidden></div>
 
 <div id="chatSheet" class="sticker" hidden>
-  <div class="sheetHead"><b>Chat</b><button class="btn alt small" id="chatToggle" type="button">Esconder chat</button><button class="chip" id="chatClose" type="button" aria-label="Fechar chat">✕</button></div>
+  <div class="sheetHead"><b id="chatTitle">Chat</b><button class="btn alt small" id="chatToggle" type="button">Esconder chat</button><button class="chip" id="chatClose" type="button" aria-label="Fechar chat">✕</button></div>
   <div class="quick" id="quick"></div>
   <form id="chatForm" class="row"><input type="text" id="chatIn" maxlength="60" placeholder="Escreva e manda…" autocomplete="off" aria-label="Mensagem"><button class="btn small" type="submit">Enviar</button></form>
   <p class="rules">Palavrões e links são bloqueados automaticamente.</p>
@@ -613,7 +613,7 @@ const MODES={
           if(t.owner===p.id)continue;
           const cx=clamp(p.x,t.x,t.x+t.w),cy=clamp(p.y,t.y,t.y+t.h);
           if(Math.hypot(p.x-cx,p.y-cy)<=p.r+5){
-            if(t.owner>=0&&Math.random()<.15)botSay(p,'picha',.6);
+            if(t.owner>=0&&Math.random()<.05)botSay(p,'picha',.5);
             t.owner=p.id;t.t=1;
             for(let i=0;i<5;i++)part(cx,cy,rand(-90,90),rand(-90,90),p.color,rand(2,5),.45);
             if(p===me&&this.snd<=0){SFX.paint();this.snd=.05}
@@ -723,7 +723,7 @@ function startRound(){
   $('#hud').hidden=false;$('#modeName').textContent=mode.name;$('#roundNo').textContent=`${roundIdx+1}/3`;
   $('#timer').textContent=ROUND_TIME;$('#timer').classList.remove('hot');$('#hint').hidden=roundIdx>0;
   const sp=OUTDOORS[roundIdx%OUTDOORS.length];
-  state='intro';stateT=3.6;timeLeft=ROUND_TIME;
+  state='intro';stateT=3.6;timeLeft=ROUND_TIME;leader=null;leadT=0;
   renderCard(`
     <div class="eyebrow">Rodada ${roundIdx+1} de 3</div>
     <h2 class="mode">${mode.name}</h2>
@@ -1022,16 +1022,41 @@ const ZOEIRA={
   picha:['esse muro é meu','pichei por cima kkk','arte moderna 🎨','assinado: eu'],
   first:['PRIMEIRO!!','chegueeei','lentos demais','tem desconto pra quem chega em 1º?'],
   target:['onde fica isso??','bora!!','tô perdido kkk','sigam-me','é do lado da praça?'],
-  win:['GG 😎','ganhei, aceitem','fácil','respeita'],
-  lose:['roubado','lag','próxima eu ganho','foi o controle'],
+  win:['GG 😎','ganhei, aceitem','tudo pato 🦆','seus ruins','HAHAHAHAHA','já era','valeu, valeu','respeita'],
+  lose:['roubado','lag','próxima eu ganho','foi o controle','gg','valeu','revanche!'],
+  lead:['tudo pato 🦆','seus ruins','HAHAHAHAHA','já era','gg','valeu, valeu','ninguém me pega','alguém me para?','cadê vocês? kkk','obrigado pela participação'],
+  leadEnd:['JÁ ERA','gg, valeu','pode desligar','tudo pato 🦆','HAHAHAHAHA'],
+  lostLead:['NÃO','volta aqui!!','foi sorte','ainda dá','tava de boa…'],
+  chase:['alguém para o {L}!','{L} tá roubando','todo mundo no {L}!','calma, {L}','ainda não acabou, {L}','{L} se achando kkk'],
+  answerBrag:['calma aí','vai ver só','humilde, hein','print pra cobrar depois','ainda não acabou','convencido kkk'],
   idle:['alguém joga sério aqui?','quem é o rosa? 👀','manda o link pros amigos','esse mapa é enorme','gg','que zona kkkk','quem é a Ju?','ANA RESPONDE O CARA','Marquinhos volta pfv','alguém viu a padaria?'],
   reply:['kkkkk','verdade','fala sério','quem é você? kkk','concordo','📸 printei','isso aí'],
   fila:['me deixa entrar!!','próxima sou eu','👀','bora logo','assistindo de camarote'],
 };
-const QUICK=['KKKKKKK','sai da frente!','vem tranquilo','gg','covardia!','vou pichar tudo','me ajuda aí','bora mais uma'];
+const QUICK=['KKKKKKK','sai da frente!','vem tranquilo','gg','covardia!','vou pichar tudo','ainda dá!','bora mais uma'];
+const QUICK_LEAD=['tudo pato 🦆','seus ruins','HAHAHAHAHA','já era','gg','valeu, valeu','ninguém me pega','alguém me para?'];
+const BRAG=new Set(QUICK_LEAD.concat(ZOEIRA.lead).map(t=>t.toLowerCase()));
 const BAD=['porra','caralho','merda','puta','fdp','buceta','arrombad','viado','bicha','macaco','corno','piroca','vagabund','cuzao','foder','fuder','transa','nude','pinto','xoxota','punheta','retardad'];
 const fold=t=>t.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
-let chatOn=store.get('role_chat')!==false,feed=[],pending=[],chatGap=0;
+let chatOn=store.get('role_chat')!==false,feed=[],pending=[],chatGap=0,leader=null,leadT=0,bragT=0;
+function currentLeader(){
+  const r=players.slice().sort((a,b)=>b.score-a.score);
+  return r.length>1&&Math.floor(r[0].score)>=Math.floor(r[1].score)+1&&r[0].score>=1?r[0]:null;
+}
+function leaderTick(dt){
+  leadT-=dt;bragT-=dt;if(leadT>0)return;leadT=.5;
+  const L=currentLeader();
+  if(L&&L!==leader){
+    const old=leader;leader=L;bragT=rand(5,8);
+    if(L.bot){L.chatCd=0;botSay(L,'lead',.85)}
+    else{const b=pick(players.filter(p=>p.bot));botSay(b,'chase',.9);toast('Você tá na frente! Zoa no 💬')}
+    if(old)botSay(old,'lostLead',.6);
+  }else if(L&&bragT<=0){
+    bragT=timeLeft<12?rand(3,5):rand(5,8);
+    if(L.bot){L.chatCd=0;botSay(L,timeLeft<12?'leadEnd':'lead',.8)}
+    else botSay(pick(players.filter(p=>p.bot)),'chase',.5);
+  }
+}
 function clean(t){
   t=String(t).normalize('NFC').replace(/\s+/g,' ').trim().slice(0,60);
   t=t.replace(/(https?:\/\/|www\.)\S*/gi,'[link]').replace(/\b\S+\.(com|net|org|br|io|gg|app|xyz)\S*/gi,'[link]');
@@ -1047,11 +1072,13 @@ function say(p,text,who){
 }
 function botSay(p,key,prob=.5){
   if(!p||!p.bot||!chatOn||p.chatCd>0||Math.random()>prob)return;
-  p.chatCd=rand(4,8);pending.push({p,text:pick(ZOEIRA[key]),t:rand(.3,1.1)});
+  p.chatCd=rand(4,8);const L=leader||currentLeader();
+  pending.push({p,text:pick(ZOEIRA[key]).replace('{L}',L?L.name:'líder'),t:rand(.3,1.1)});
 }
 function meSay(text){
   if(!me||!String(text).trim())return;say(me,text);SFX.bump();
-  if(chatOn&&Math.random()<.7){const b=pick(players.filter(p=>p.bot));if(b){b.chatCd=0;botSay(b,'reply',1)}}
+  const brag=BRAG.has(String(text).toLowerCase());
+  if(chatOn&&(brag||Math.random()<.7)){const b=pick(players.filter(p=>p.bot));if(b){b.chatCd=0;botSay(b,brag?'answerBrag':'reply',1)}}
 }
 function chatTick(dt){
   for(const p of players){p.chatCd-=dt;if(p.say){p.say.t-=dt;if(p.say.t<=0)p.say=null}}
@@ -1064,6 +1091,7 @@ function chatTick(dt){
   }
   const n=feed.length;for(const f of feed)f.t+=dt;feed=feed.filter(f=>f.t<9);if(feed.length!==n)renderFeed();
   if(state==='play'&&chatOn){
+    leaderTick(dt);
     if(Math.random()<dt*.18)botSay(pick(players.filter(p=>p.bot)),'idle',.8);
     if(Math.random()<dt*.05)pending.push({p:null,who:pick(NAMES)+' (fila)',text:pick(ZOEIRA.fila),t:0});
   }
@@ -1084,8 +1112,12 @@ function drawBubble(g,p){
   g.fillStyle='#1b1a22';g.textAlign='center';g.textBaseline='middle';g.fillText(t,p.x,y+h/2+.5);g.globalAlpha=1;
 }
 const sheet=$('#chatSheet');
-QUICK.forEach(q=>{const b=document.createElement('button');b.type='button';b.textContent=q;b.addEventListener('click',()=>{meSay(q);closeChat()});$('#quick').appendChild(b)});
-function openChat(){sheet.hidden=false;joy.active=false;joy.id=null;input.x=input.y=0;syncChatToggle()}
+function fillQuick(){
+  const lead=me&&state==='play'&&currentLeader()===me,q=$('#quick');q.innerHTML='';
+  $('#chatTitle').textContent=lead?'Você tá na frente: zoa!':'Chat';
+  (lead?QUICK_LEAD:QUICK).forEach(t=>{const b=document.createElement('button');b.type='button';b.textContent=t;b.addEventListener('click',()=>{meSay(t);closeChat()});q.appendChild(b)});
+}
+function openChat(){fillQuick();sheet.hidden=false;joy.active=false;joy.id=null;input.x=input.y=0;syncChatToggle()}
 function closeChat(){sheet.hidden=true;$('#chatIn').blur()}
 function syncChatToggle(){$('#chatToggle').textContent=chatOn?'Esconder chat':'Mostrar chat';$('#quick').hidden=!chatOn;$('#chatForm').hidden=!chatOn}
 $('#chatBtn').addEventListener('click',()=>sheet.hidden?openChat():closeChat());
