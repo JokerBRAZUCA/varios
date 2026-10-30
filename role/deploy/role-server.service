@@ -1,0 +1,28 @@
+# /etc/systemd/system/role-server.service
+[Unit]
+Description=Rolê: servidor multiplayer
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/role
+ExecStart=/usr/bin/env node /opt/role/server/server.mjs
+Environment=PORT=8090
+Environment=HOST=127.0.0.1
+Environment=MAX_ROOMS=16
+Environment=ROOM_SIZE=50
+Environment=MAX_PER_IP=6
+Environment=ALLOWED_ORIGINS=https://role.close4us.com
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+MemoryMax=600M
+LimitNOFILE=65536
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
