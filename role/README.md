@@ -65,7 +65,7 @@ node role/server/loadtest.mjs 500 30 ws://127.0.0.1:8099/ws
 ## Publicar em role.close4us.com
 
 ### 1. DNS
-No painel do domínio close4us.com, crie um registro **A** com nome `role` apontando para o IP da VPS (o mesmo de `eleicaopresidente.close4us.com`). Se houver IPv6, crie também o **AAAA**. Confira com:
+No Squarespace Domains (close4us.com → DNS → Custom records), crie um registro **A** com host `role` apontando para `76.13.238.103`, o IP da VPS (o mesmo de `eleicaopresidente.close4us.com`). Se houver IPv6, crie também o **AAAA**. Confira com:
 ```sh
 dig +short role.close4us.com
 ```
