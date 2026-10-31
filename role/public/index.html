@@ -74,7 +74,7 @@ input[type=text]:focus{outline:3px solid var(--sky);outline-offset:2px}
 .fine{font-size:13px;color:var(--paper);text-align:center;line-height:1.4;text-shadow:1px 1px 0 var(--ink);margin:0}
 
 /* matchmaking */
-.dots{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:6px}
+.dots{display:grid;grid-template-columns:repeat(5,minmax(0,44px));justify-content:center;gap:10px}
 .dots i{aspect-ratio:1;border-radius:50%;border:2px dashed var(--line)}
 .dots i.on{border:2px solid var(--ink);animation:pop .2s ease-out}
 .dots i.me{box-shadow:0 0 0 2px var(--paper),0 0 0 4px var(--ink)}
@@ -164,6 +164,17 @@ input[type=text]:focus{outline:3px solid var(--sky);outline-offset:2px}
 .screen.peek .card{padding:14px;gap:8px}
 body.spectating #dash,body.spectating #hint{display:none}
 
+/* sala de amigos */
+.friends{display:flex;flex-direction:column;gap:8px;padding-top:4px;border-top:2px dashed var(--line)}
+.friends .lbl{font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;margin-top:8px}
+#codeForm{gap:8px}
+#codeForm input{font-family:var(--display);font-size:20px;letter-spacing:.2em;text-transform:uppercase;padding:8px 12px}
+#codeForm .btn{flex:none;width:auto}
+.codeRow{display:flex;align-items:center;gap:12px}
+.code{flex:1;min-width:0;font-family:var(--display);font-size:clamp(30px,10vw,42px);letter-spacing:.14em;line-height:1}
+.codeRow .btn{width:auto;flex:none}
+.wait{margin:0;font-weight:700;color:var(--muted);line-height:1.4}
+
 /* cartão de rodada */
 #card{position:fixed;inset:0;z-index:15;display:flex;align-items:center;justify-content:center;pointer-events:none;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
@@ -234,6 +245,11 @@ body.spectating #dash,body.spectating #hint{display:none}
       <label class="lbl">Sua cor</label>
       <div class="swatches" id="swatches"></div>
       <button class="btn" id="play">JOGAR</button>
+      <div class="friends" id="friendsBox">
+        <div class="lbl">Jogar com amigos</div>
+        <button class="btn alt small" id="mkRoom">Criar sala com código</button>
+        <form class="row" id="codeForm"><input type="text" id="codeIn" maxlength="5" placeholder="CÓDIGO" autocomplete="off" autocapitalize="characters" aria-label="Código da sala"><button class="btn alt small" type="submit">Entrar</button></form>
+      </div>
       <button class="btn alt small" id="openAds">Coloque seu recado na cidade</button>
     </div>
     <p class="fine" id="lobbyNote">Jogue com quem estiver online agora. Se faltar gente, bots completam a sala.</p>
@@ -245,7 +261,7 @@ body.spectating #dash,body.spectating #hint{display:none}
   <div class="panel">
     <div class="sticker card">
       <h2 id="mmTitle">Procurando sala…</h2>
-      <div class="mmRow"><span id="mmLast">&nbsp;</span><span><b id="mmN">0</b>/50</span></div>
+      <div class="mmRow"><span id="mmLast">&nbsp;</span><span><b id="mmN">0</b>/<span id="mmT">15</span></span></div>
       <div class="dots" id="dots"></div>
       <p id="mmNote">Pouca gente online agora. Completamos a sala com bots, e eles saem quando alguém entra.</p>
     </div>
@@ -268,6 +284,21 @@ body.spectating #dash,body.spectating #hint{display:none}
       </div>
       <button class="btn alt small" id="quit">Sair</button>
       <input type="text" id="shareTxt" readonly hidden aria-label="Texto pra compartilhar">
+    </div>
+  </div>
+</section>
+
+<!-- SALA DE AMIGOS -->
+<section class="screen peek" id="friends" hidden>
+  <div class="panel">
+    <div class="sticker card">
+      <div class="eyebrow">Sala dos amigos · passe o código</div>
+      <div class="codeRow"><span class="code" id="fCode">-----</span><button class="btn small" id="fShare" type="button">Compartilhar</button></div>
+      <p id="fPeople">Só você por enquanto.</p>
+      <button class="btn pink" id="fStart" type="button">COMEÇAR PARTIDA</button>
+      <p class="wait" id="fWait" hidden>Esperando quem criou a sala começar. Enquanto isso, dá pra andar pela cidade.</p>
+      <input type="text" id="fShareTxt" readonly hidden aria-label="Convite pra copiar">
+      <button class="btn alt small" id="fLeave" type="button">Sair da sala</button>
     </div>
   </div>
 </section>

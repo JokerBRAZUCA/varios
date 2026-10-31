@@ -1,8 +1,8 @@
 // Rolê: lógica do jogo compartilhada entre o servidor multiplayer, o modo offline
 // do navegador e a previsão de movimento do próprio boneco. Não usa DOM.
 
-export const ROOM=50,ROUND_TIME=60,ROUNDS=3,INTRO_TIME=3.6,ROUND_END_TIME=3.2,RESULTS_TIME=12;
-export const BC=5,BR=6,BS=288,ST=128,M=64,FRONT=26,CELL=32;
+export const ROOM=15,ROUND_TIME=60,ROUNDS=3,INTRO_TIME=3.6,ROUND_END_TIME=3.2,RESULTS_TIME=12;
+export const BC=4,BR=5,BS=288,ST=128,M=64,FRONT=26,CELL=32;
 export const W=M*2+BC*BS+(BC-1)*ST,H=M*2+BR*BS+(BR-1)*ST;
 export const MAXS=190,DASH=540,DASH_CD=1.1,PR=14;
 
@@ -109,8 +109,8 @@ const ROOFS=['#e07a5f','#81b29a','#f2cc8f','#6d7fcc','#c98bb9','#9fb8ad','#d4a37
 const BK=128;
 export function buildWorld(){
   const w={blocks:[],buildings:[],muros:[],rects:[],circles:[],tiles:[],billboard:null,
-    plaza:{x:M+2*(BS+ST),y:M+2*(BS+ST),w:BS,h:BS*2+ST},fields:new Map()};
-  const isPlaza=(r,c)=>c===2&&(r===2||r===3);
+    plaza:{x:M+1*(BS+ST),y:M+2*(BS+ST),w:BS,h:BS*2+ST},fields:new Map()};
+  const isPlaza=(r,c)=>c===1&&(r===2||r===3);
   let li=0,ri=0,oi=0;
   for(let r=0;r<BR;r++)for(let c=0;c<BC;c++){
     if(isPlaza(r,c))continue;
@@ -350,7 +350,7 @@ export const MODES={
     name:'Corre Pra Loja',unit:'pontos',
     tip:'Chegue primeiro na porta da loja indicada. Empurre quem estiver no caminho!',
     area:w=>({x:w.plaza.x-60,y:w.plaza.y+40,w:BS+120,h:BS*2}),
-    PTS:[15,12,10,8,6,5,4,3,2,1],
+    PTS:[10,7,5,3,1],
     start(m){m.ms.target=-1;m.ms.first=true;this.newTarget(m)},
     newTarget(m){
       const w=m.w,prev=m.ms.target>=0?w.buildings[m.ms.target]:null;

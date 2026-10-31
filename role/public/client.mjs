@@ -1,7 +1,7 @@
 // Rolê no navegador: desenho, controles, telas, chat e rede.
 // Online, o servidor manda nas partidas e o navegador prevê só o próprio boneco.
 // Sem servidor (ou na prévia), a mesma lógica roda aqui com bots.
-import {buildWorld,applyAd,Match,stepPlayer,dash,MODES,W,H,BS,ST,M,FRONT,ROUND_TIME,
+import {buildWorld,applyAd,Match,stepPlayer,dash,MODES,W,H,BS,ST,M,BC,BR,FRONT,ROUND_TIME,
   COLORS,OUTDOORS,NAMES,QUICK,QUICK_LEAD,cleanChat,inkOn,rand,clamp,pick,seeded} from './game.mjs';
 
 const $=s=>document.querySelector(s);
@@ -189,19 +189,23 @@ document.querySelectorAll('.reacts .chip[data-r]').forEach(b=>b.addEventListener
 }));
 
 /* ================= telas e fluxo ================= */
-function showScreen(id){for(const s of ['lobby','match','results','ads','queue'])$('#'+s).hidden=s!==id;if(id==='ads')openAds()}
+function showScreen(id){for(const s of ['lobby','match','results','ads','queue','friends'])$('#'+s).hidden=s!==id;if(id==='ads')openAds()}
 function renderCard(html){const c=$('#card');c.innerHTML=`<div class="sticker">${html}</div>`;c.hidden=false}
 function hideCard(){$('#card').hidden=true}
 function showHud(on){$('#hud').hidden=!on;document.body.classList.toggle('spectating',on&&!me)}
 
-function play(){
+function play(opts={mode:'pub'}){
   audio();
   nick=($('#nick').value.trim()||'Você').slice(0,12);store.set('role_nick',nick);store.set('role_color',colorIdx);
   if(preview){startOffline();return}
   showScreen('match');$('#mmTitle').textContent='Conectando…';$('#mmN').textContent='0';$('#mmLast').textContent='';$('#dots').innerHTML='';
-  $('#mmNote').textContent='Procurando uma sala com gente.';
-  connect().catch(()=>startOffline('Sem conexão com o servidor agora. Você joga com bots.'));
+  $('#mmNote').textContent=opts.mode==='pub'?'Procurando uma sala com gente.':opts.mode==='new'?'Criando a sala dos amigos.':`Entrando na sala ${opts.code}.`;
+  connect(opts).catch(()=>{
+    if(opts.mode==='pub')startOffline('Sem conexão com o servidor agora. Você joga com bots.');
+    else{showScreen('lobby');$('#lobbyNote').textContent='Não deu pra conectar ao servidor. Salas com código precisam de conexão.'}
+  });
 }
+const normCode=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,5);
 
 /* ---------- offline ---------- */
 function startOffline(note){
@@ -210,12 +214,13 @@ function startOffline(note){
   else{me=match.addHuman(nick,COLORS[colorIdx])}
   myId=me.id;
   if(note)$('#lobbyNote').textContent=note;
+  $('#mmT').textContent=match.players.length;
   fillDots(match.players.map(p=>({color:p.color,me:p===me,name:p.name,bot:p.bot})),
     note||'Pouca gente online agora. Completamos a sala com bots, e eles saem quando alguém entra.',
     ()=>{showScreen(null);showHud(true);lastPhaseKey=null;match.startMatch()});
 }
 function fillDots(list,noteText,done){
-  showScreen('match');const dots=$('#dots');dots.innerHTML='';
+  showScreen('match');const dots=$('#dots');dots.innerHTML='';$('#mmT').textContent=list.length;
   for(let i=0;i<list.length;i++)dots.appendChild(document.createElement('i'));
   $('#mmTitle').textContent='Procurando sala…';$('#mmNote').textContent=noteText;
   const order=list.slice().sort((a,b)=>(b.me-a.me)||(a.bot-b.bot));
@@ -229,14 +234,14 @@ function fillDots(list,noteText,done){
 }
 
 /* ---------- online ---------- */
-function connect(){
+function connect(opts){
   return new Promise((resolve,reject)=>{
     let ws;try{ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws`)}catch(e){reject(e);return}
     let ok=false;const to=setTimeout(()=>{if(!ok){try{ws.close()}catch(e){}reject(new Error('timeout'))}},4000);
-    ws.onopen=()=>ws.send(JSON.stringify({t:'hello',name:nick,c:colorIdx,vw:Math.round(VW/SCALE),vh:Math.round(VH/SCALE)}));
+    ws.onopen=()=>ws.send(JSON.stringify({t:'hello',name:nick,c:colorIdx,vw:Math.round(VW/SCALE),vh:Math.round(VH/SCALE),mode:opts.mode,code:opts.code}));
     ws.onmessage=ev=>{
       let m;try{m=JSON.parse(ev.data)}catch(e){return}
-      if(m.t==='hi'){ok=true;clearTimeout(to);startOnline(ws);resolve();return}
+      if(m.t==='hi'){ok=true;clearTimeout(to);startOnline(ws);net.priv=opts.mode!=='pub';resolve();return}
       onNet(m);
     };
     ws.onclose=()=>{clearTimeout(to);if(!ok)reject(new Error('closed'));else if(net.ws===ws)lostConnection()};
@@ -256,6 +261,23 @@ function lostConnection(){
 }
 function onNet(m){
   switch(m.t){
+    case 'err':{
+      const ws=net.ws;net.ws=null;mode=null;me=null;myId=0;try{ws&&ws.close()}catch(e){}
+      showHud(false);showScreen('lobby');clearHash();
+      $('#lobbyNote').textContent=m.e==='code'?`Não achei nenhuma sala com o código ${m.code}. Confira com quem te mandou.`:
+        m.e==='full'?`A sala ${m.code} está cheia.`:'O servidor está lotado agora. Tente de novo em alguns minutos.';
+      break;
+    }
+    case 'lob':{
+      net.lob=m;
+      $('#fCode').textContent=m.code;
+      $('#fPeople').textContent=m.people.length>1?`Na sala: ${m.people.join(', ')} (${m.people.length}/${m.size}). Bots completam as vagas.`:'Só você por enquanto. Mande o código pros amigos; bots completam as vagas.';
+      $('#fStart').hidden=!m.host;$('#fWait').hidden=m.host;
+      try{history.replaceState(null,'',location.pathname+location.search+'#'+m.code)}catch(e){}
+      if(m.waiting){hideCard();showHud(true);if($('#results').hidden)showScreen('friends')}
+      else if(!$('#friends').hidden)showScreen(null);
+      break;
+    }
     case 'j':{
       net.tiles.set(m.tiles);
       if(m.id>0){
@@ -268,6 +290,7 @@ function onNet(m){
     }
     case 'ro':
       net.roster=new Map(m.l.map(([id,name,color,bot])=>[id,{id,name,color,bot:!!bot}]));
+      if(net.joinPending&&net.priv){net.joinPending=false;showHud(true);lastPhaseKey=null}
       if(net.joinPending){net.joinPending=false;
         const list=m.l.map(([id,name,color,bot])=>({color,me:id===myId,name,bot:!!bot})),h=list.filter(p=>!p.bot).length;
         fillDots(list,h>1?`${h} pessoas na sala. Bots completam o resto e saem quando alguém entra.`:'Pouca gente online agora. Completamos a sala com bots, e eles saem quando alguém entra.',
@@ -300,13 +323,13 @@ function onSnap(s){
   if(s.td)for(const [i,o] of s.td){net.tiles[i]=o;paintFx(i,o)}
   if(s.e)for(const e of s.e)fx(e);
   if(s.me&&me)reconcile(s);
-  $('#watch').textContent=s.q?`${s.h} na sala · ${s.q} na fila`:`${s.h} ${s.h===1?'pessoa':'pessoas'} na sala`;
+  $('#watch').textContent=s.q&&!net.priv?`${s.h} na sala · ${s.q} na fila`:`${s.h} ${s.h===1?'pessoa':'pessoas'} na sala`;
 }
 function reconcile(s){
   const a=s.me,first=me.x<0;
   Object.assign(me,{x:a[0],y:a[1],vx:a[2],vy:a[3],stun:a[4]/100,dashT:a[5]/100,dashCd:a[6]/100,knockImm:a[7]/100,arrived:!!(a[8]&4),passCd:a[9]/100});
   net.pending=net.pending.filter(i=>i.s>s.ack);
-  if(s.ph==='play')for(const i of net.pending){me.input={x:i.x,y:i.y};if(i.d)dash(me,null);stepPlayer(world,me,STEP,null,false)}
+  if(s.ph==='play'||s.ph==='idle')for(const i of net.pending){me.input={x:i.x,y:i.y};if(i.d)dash(me,null);stepPlayer(world,me,STEP,null,false)}
   if(first||!net.vis)net.vis={x:me.x,y:me.y};
 }
 function onlineStep(dt){
@@ -316,7 +339,7 @@ function onlineStep(dt){
     net.acc-=STEP;
     const i={s:++net.seq,x:+input.x.toFixed(2),y:+input.y.toFixed(2),d:net.dashQ?1:0};net.dashQ=false;
     netSend({t:'i',...i});net.pending.push(i);if(net.pending.length>90)net.pending.shift();
-    if(net.last&&net.last.ph==='play'&&me.x>=0){me.input={x:i.x,y:i.y};if(i.d)dash(me,null);stepPlayer(world,me,STEP,null,false)}
+    if(net.last&&(net.last.ph==='play'||net.last.ph==='idle')&&me.x>=0){me.input={x:i.x,y:i.y};if(i.d)dash(me,null);stepPlayer(world,me,STEP,null,false)}
   }
   if(net.vis){const dx=me.x-net.vis.x,dy=me.y-net.vis.y;if(Math.hypot(dx,dy)>120){net.vis.x=me.x;net.vis.y=me.y}else{const k=Math.min(1,dt*18);net.vis.x+=dx*k;net.vis.y+=dy*k}}
   for(const q of net.say.values())q.t-=dt;
@@ -343,6 +366,8 @@ function phaseUI(v){
       if(prev===null&&mode==='online')toast(`Rodada em andamento: ${MODES[v.modeKey].name}`);
     }else if(v.phase==='roundEnd'&&mode==='offline'){
       const r=match.lastRound;roundEndCard(r,r.findIndex(x=>x.id===myId)+1,r.length,match.modeKey);
+    }else if(v.phase==='idle'&&mode==='online'){
+      hideCard();$('#modeName').textContent='Sala dos amigos';$('#timer').textContent='…';$('#timer').classList.remove('hot');$('#roundNo').textContent='0/3';
     }else if(v.phase==='results'){
       if(mode==='offline')offlineResults();
       else if(prev===null)renderCard(`<div class="eyebrow">Intervalo</div><h2 class="mode">Próxima partida já já</h2><p class="tip">Você entra na próxima rodada.</p>`);
@@ -373,7 +398,7 @@ function roundEndCard(top,myPos,n,mk){
 function offlineResults(){
   const m=match,top=m.final.slice(0,8).map(f=>{const p=m.byId.get(f.id);return{id:p.id,name:p.name,color:p.color,bot:p.bot,total:f.total}});
   const i=m.final.findIndex(f=>f.id===myId);
-  const rot=m.rotateBots(5);
+  const rot=m.rotateBots(3);
   showResults({top,me:i>=0?{rank:i+1,total:m.final[i].total}:null,n:m.final.length,rot,online:false});
 }
 function showResults(r){
@@ -405,6 +430,7 @@ function showResults(r){
 let boardT=0;
 function updateBoard(v){
   if(--boardT>0)return;boardT=8;
+  $('#board').hidden=v.phase==='idle';if(v.phase==='idle')return;
   let top,r,s,n;
   if(mode==='online'){const b=net.board;if(!b)return;top=b.top.map(([id,score])=>({id,score}));r=b.r;s=b.s;n=b.n}
   else{const ranked=match.ranking();top=ranked.slice(0,3).map(p=>({id:p.id,score:Math.max(0,Math.floor(p.score))}));r=me?ranked.indexOf(me)+1:0;s=me?Math.max(0,Math.floor(me.score)):0;n=ranked.length}
@@ -523,8 +549,8 @@ function render(){
   const pz=world.plaza;
   // ruas
   g.strokeStyle='rgba(255,210,63,.55)';g.lineWidth=3;g.setLineDash([18,16]);
-  for(let c=1;c<5;c++){const x=M+c*(BS+ST)-ST/2;g.beginPath();g.moveTo(x,0);g.lineTo(x,H);g.stroke()}
-  for(let r=1;r<6;r++){const y=M+r*(BS+ST)-ST/2;g.beginPath();g.moveTo(0,y);g.lineTo(W,y);g.stroke()}
+  for(let c=1;c<BC;c++){const x=M+c*(BS+ST)-ST/2;g.beginPath();g.moveTo(x,0);g.lineTo(x,H);g.stroke()}
+  for(let r=1;r<BR;r++){const y=M+r*(BS+ST)-ST/2;g.beginPath();g.moveTo(0,y);g.lineTo(W,y);g.stroke()}
   g.setLineDash([]);
   g.fillStyle='#cfc8bb';
   for(const b of world.blocks){if(!vis({x:b.x-14,y:b.y-14,w:b.w+28,h:b.h+28}))continue;rr(g,b.x-14,b.y-14,b.w+28,b.h+28,14);g.fill()}
@@ -663,7 +689,7 @@ function drawEdgeMarker(g,mk){
 
 /* ================= controles ================= */
 const joy={active:false,id:null,ox:0,oy:0};
-const canMove=()=>me&&mode&&curView&&(curView.phase==='play'||curView.phase==='intro');
+const canMove=()=>me&&mode&&curView&&(curView.phase==='play'||curView.phase==='intro'||(mode==='online'&&curView.phase==='idle'));
 function doDash(){
   if(!me||!curView||curView.phase!=='play'||me.dashCd>0||me.stun>0)return;
   SFX.dash();
@@ -699,9 +725,26 @@ function swatches(el,list,getIdx,setIdx){
 }
 $('#nick').value=nick;
 swatches($('#swatches'),COLORS,()=>colorIdx,i=>{colorIdx=i;store.set('role_color',i)});
-if(preview)$('#lobbyNote').textContent='Nesta prévia você joga com bots. No endereço oficial, a sala junta as pessoas online.';
-$('#play').addEventListener('click',play);
+if(preview){$('#lobbyNote').textContent='Nesta prévia você joga com bots. No endereço oficial, a sala junta as pessoas online e dá pra criar sala com código.';$('#friendsBox').hidden=true}
+$('#play').addEventListener('click',()=>play());
 $('#nick').addEventListener('keydown',e=>{if(e.key==='Enter')play()});
+$('#mkRoom').addEventListener('click',()=>play({mode:'new'}));
+$('#codeIn').addEventListener('input',e=>{e.target.value=normCode(e.target.value)});
+$('#codeForm').addEventListener('submit',e=>{e.preventDefault();const code=normCode($('#codeIn').value);
+  if(code.length!==5){$('#lobbyNote').textContent='O código tem 5 letras e números, como K7QPM.';$('#codeIn').focus();return}
+  play({mode:'join',code})});
+const hashCode=normCode(location.hash.slice(1));
+if(!preview&&hashCode.length===5){$('#codeIn').value=hashCode;$('#lobbyNote').textContent=`Você recebeu o código ${hashCode}. Escolha seu apelido e toque em Entrar.`}
+function clearHash(){try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}}
+$('#fStart').addEventListener('click',()=>netSend({t:'start'}));
+$('#fLeave').addEventListener('click',()=>toLobby());
+$('#fShare').addEventListener('click',()=>{
+  const code=net.lob&&net.lob.code;if(!code)return;
+  const txt=`Bora jogar Rolê comigo! Entra com o código ${code}: ${location.origin}/#${code}`,btn=$('#fShare');
+  const fallback=()=>{const i=$('#fShareTxt');i.hidden=false;i.value=txt;i.focus();i.select()};
+  if(navigator.share){navigator.share({text:txt}).catch(()=>{});return}
+  try{navigator.clipboard.writeText(txt).then(()=>{btn.textContent='Copiado!';setTimeout(()=>btn.textContent='Compartilhar',1800)},fallback)}catch(e){fallback()}
+});
 $('#again').addEventListener('click',()=>{
   if(mode==='online'){showScreen(net.queued?'queue':null);return}
   showScreen(null);lastPhaseKey=null;match.startMatch();
@@ -709,7 +752,7 @@ $('#again').addEventListener('click',()=>{
 function toLobby(){
   if(mode==='online'){const ws=net.ws;net.ws=null;mode=null;try{ws&&ws.close()}catch(e){}}
   if(mode==='offline'&&me){match.humanLeft(me)}
-  mode=null;me=null;myId=0;match=attract;match.phase='idle';match.modeKey=null;match.mode=null;
+  mode=null;me=null;myId=0;net.priv=false;net.lob=null;clearHash();match=attract;match.phase='idle';match.modeKey=null;match.mode=null;
   showHud(false);hideCard();closeChat();feed=[];renderFeed();showScreen('lobby');
 }
 $('#quit').addEventListener('click',toLobby);

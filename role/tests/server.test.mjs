@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import {startServer,configFromEnv} from '../server/server.mjs';
+import {startServer,configFromEnv,normCode} from '../server/server.mjs';
 import {buildWorld,Match,cleanChat,cleanName,botNames,ROOM} from '../public/game.mjs';
 
 const cfg=o=>({...configFromEnv({}),port:0,trustProxy:false,...o});
@@ -122,4 +122,36 @@ test('recusa origem não autorizada e mensagens grandes demais',async()=>{
     a.send({t:'c',text:'x'.repeat(10000)});
     assert.equal(await closed,1009);
   }finally{await s.close()}
+});
+
+test('sala de amigos: criar, entrar com código e o anfitrião começa',async()=>{
+  const s=await startServer(cfg({}));
+  try{
+    const a=client(s.port),b=client(s.port),c=client(s.port),d=client(s.port);
+    await Promise.all([a.open,b.open,c.open,d.open]);
+    a.send({t:'hello',name:'Ana',mode:'new'});
+    const la=await a.wait(m=>m.t==='lob');
+    assert.match(la.code,/^[A-Z2-9]{5}$/);assert.equal(la.host,true);assert.equal(la.waiting,true);
+    await a.wait(m=>m.t==='s'&&m.ph==='idle');
+    b.send({t:'hello',name:'Beto',mode:'join',code:la.code.toLowerCase()});
+    const lb=await b.wait(m=>m.t==='lob');
+    assert.equal(lb.host,false);assert.deepEqual(lb.people,['Ana','Beto']);
+    c.send({t:'hello',name:'Caio'});const jc=await c.wait(m=>m.t==='j');
+    assert.notEqual(jc.room,lb.room??-1);
+    const ja=a.msgs.find(m=>m.t==='j'),jb=b.msgs.find(m=>m.t==='j');
+    assert.equal(ja.room,jb.room);assert.notEqual(jc.room,ja.room);
+    d.send({t:'hello',name:'Davi',mode:'join',code:'ZZZZ9'});
+    assert.equal((await d.wait(m=>m.t==='err')).e,'code');
+    b.send({t:'start'});
+    await new Promise(r=>setTimeout(r,300));
+    assert.ok(!b.msgs.some(m=>m.t==='s'&&m.ph==='intro'));
+    a.send({t:'start'});
+    await b.wait(m=>m.t==='lob'&&m.waiting===false);
+    await b.wait(m=>m.t==='s'&&m.ph==='intro');
+    a.ws.close();
+    const lb2=await b.wait(m=>m.t==='lob'&&m.host===true);
+    assert.deepEqual(lb2.people,['Beto']);
+    b.ws.close();c.ws.close();d.ws.close();
+  }finally{await s.close()}
+  assert.equal(normCode(' ab-c12x '),'ABC12');
 });

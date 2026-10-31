@@ -7,13 +7,15 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 import {acceptUpgrade} from './ws.mjs';
 import {buildWorld,Match,dash,cleanChat,cleanName,botNames,COLORS,REACTIONS,ROOM,RESULTS_TIME,clamp} from '../public/game.mjs';
 
-const TICK=1/30,SNAP_EVERY=2,BOARD_EVERY=15,ROTATE_MAX=5;
+const TICK=1/30,SNAP_EVERY=2,BOARD_EVERY=15,ROTATE_MAX=3;
+const CODE_CHARS='ABCDEFGHJKMNPQRSTUVWXYZ23456789',CODE_LEN=5;
+export const normCode=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,CODE_LEN);
 const MIME={'.html':'text/html; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.js':'text/javascript; charset=utf-8','.png':'image/png','.svg':'image/svg+xml','.json':'application/json'};
 
 export function configFromEnv(env=process.env){
   return{
     port:+(env.PORT??8090),host:env.HOST||'127.0.0.1',
-    maxRooms:+(env.MAX_ROOMS||16),roomSize:+(env.ROOM_SIZE||ROOM),maxPerIp:+(env.MAX_PER_IP||6),
+    maxRooms:+(env.MAX_ROOMS||50),roomSize:+(env.ROOM_SIZE||ROOM),maxPerIp:+(env.MAX_PER_IP||6),
     origins:(env.ALLOWED_ORIGINS||'').split(',').map(s=>s.trim()).filter(Boolean),
     staticDir:env.STATIC_DIR||'',trustProxy:env.TRUST_PROXY!=='0',
   };
@@ -29,17 +31,29 @@ export function startServer(cfg){
   const roster=m=>({t:'ro',l:m.players.map(p=>[p.id,p.name,p.color,p.bot?1:0])});
   const viewers=room=>[...room.conns,...room.specs];
 
-  function newRoom(){
+  // Sala pública começa direto. Sala de amigos espera o anfitrião, com todo mundo andando pela cidade.
+  function newRoom(priv=false){
     const m=new Match(world,{size:cfg.roomSize,auto:true});m.fillBots();
-    const room={id:nextRoom++,m,conns:new Set(),specs:new Set(),idle:0,tick:0,dirty:new Set(),ev:[],rosterSent:-1,rot:null};
+    const room={id:nextRoom++,m,conns:new Set(),specs:new Set(),idle:0,tick:0,dirty:new Set(),ev:[],rosterSent:-1,rot:null,
+      priv,code:priv?newCode():null,host:null,waiting:priv};
     m.hooks.onResults=()=>planRotation(room);
     m.hooks.beforeNext=()=>applyRotation(room);
-    m.startMatch();rooms.push(room);return room;
+    if(!priv)m.startMatch();
+    rooms.push(room);return room;
+  }
+  function newCode(){
+    for(;;){let c='';for(let i=0;i<CODE_LEN;i++)c+=CODE_CHARS[Math.floor(Math.random()*CODE_CHARS.length)];
+      if(!rooms.some(r=>r.code===c))return c}
+  }
+  function sendLobby(room){
+    if(!room.priv)return;
+    const people=[...room.conns].map(c=>c.name);
+    for(const c of room.conns)send(c,{t:'lob',code:room.code,host:c===room.host,people,waiting:room.waiting,size:cfg.roomSize});
   }
   // Prefere a sala com mais gente, para as pessoas se encontrarem.
   function pickRoom(){
     let best=null;
-    for(const r of rooms)if(r.conns.size<cfg.roomSize&&(!best||r.conns.size>best.conns.size))best=r;
+    for(const r of rooms)if(!r.priv&&r.conns.size<cfg.roomSize&&(!best||r.conns.size>best.conns.size))best=r;
     if(best)return best;
     return rooms.length<cfg.maxRooms?newRoom():null;
   }
@@ -50,7 +64,7 @@ export function startServer(cfg){
     send(c,roster(room.m));
   }
   function spectate(c){
-    let best=null;for(const r of rooms)if(!best||r.conns.size>best.conns.size)best=r;
+    let best=null;for(const r of rooms)if(!r.priv&&(!best||r.conns.size>best.conns.size))best=r;
     if(c.room!==best){if(c.room)c.room.specs.delete(c);c.room=best;if(best){best.specs.add(c);send(c,{t:'j',id:0,room:best.id,size:cfg.roomSize,tiles:Array.from(best.m.tileOwner)});send(c,roster(best.m))}}
   }
   function leave(c){
@@ -58,6 +72,7 @@ export function startServer(cfg){
     if(room){
       if(c.player&&room.conns.has(c)){room.m.humanLeft(c.player);room.conns.delete(c)}
       room.specs.delete(c);
+      if(room.priv){if(room.host===c)room.host=room.conns.values().next().value||null;sendLobby(room)}
     }
     const qi=queue.indexOf(c);if(qi>=0)queue.splice(qi,1);
     c.player=null;c.room=null;
@@ -69,7 +84,7 @@ export function startServer(cfg){
   }
   // No fim da partida, quem ficou por último dá a vez a quem está na fila.
   function planRotation(room){
-    const m=room.m,k=Math.min(ROTATE_MAX,queue.length,room.conns.size);
+    const m=room.m,k=room.priv?0:Math.min(ROTATE_MAX,queue.length,room.conns.size);
     if(k>0){
       const byRank=m.final.map(f=>f.id),humans=[...room.conns].sort((a,b)=>byRank.indexOf(b.player.id)-byRank.indexOf(a.player.id));
       room.rot={humans:humans.slice(0,k),out:humans.slice(0,k).map(c=>c.name),in:queue.slice(0,k).map(c=>c.name)};
@@ -173,8 +188,24 @@ export function startServer(cfg){
         if(c.name)return;
         c.name=cleanName(msg.name)||'Visitante';c.color=COLORS[num(msg.c,0,COLORS.length-1)|0];
         view(c,msg);send(c,{t:'hi',cid:c.id});
-        const room=pickRoom();
-        if(room&&!queue.length)join(c,room);else{queue.push(c);admit()}
+        if(msg.mode==='new'){
+          if(rooms.length>=cfg.maxRooms)return send(c,{t:'err',e:'busy'});
+          const room=newRoom(true);join(c,room);room.host=c;sendLobby(room);
+        }else if(msg.mode==='join'){
+          const code=normCode(msg.code),room=rooms.find(r=>r.priv&&r.code===code);
+          if(!room)return send(c,{t:'err',e:'code',code});
+          if(room.conns.size>=cfg.roomSize)return send(c,{t:'err',e:'full',code});
+          join(c,room);sendLobby(room);
+        }else{
+          const room=pickRoom();
+          if(room&&!queue.length)join(c,room);else{queue.push(c);admit()}
+        }
+        break;
+      }
+      case 'start':{
+        const room=c.room;
+        if(!room||!room.priv||room.host!==c||!room.waiting)return;
+        room.waiting=false;room.m.startMatch();sendLobby(room);
         break;
       }
       case 'i':{
@@ -207,7 +238,7 @@ export function startServer(cfg){
     const url=new URL(req.url,'http://x');
     if(url.pathname==='/healthz'){
       res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});
-      res.end(JSON.stringify({rooms:rooms.length,players:[...clients].filter(c=>c.player).length,queue:queue.length,connections:clients.size,
+      res.end(JSON.stringify({rooms:rooms.length,friendRooms:rooms.filter(r=>r.priv).length,players:[...clients].filter(c=>c.player).length,queue:queue.length,connections:clients.size,
         maxRooms:cfg.maxRooms,roomSize:cfg.roomSize,tickMs:+stats.tickMs.toFixed(2),tickMaxMs:+stats.tickMax.toFixed(2),
         kbOutPerSec:+(stats.bytesOut/1024/((Date.now()-stats.started)/1000)).toFixed(1),uptimeS:Math.round((Date.now()-stats.started)/1000)}));
       return;

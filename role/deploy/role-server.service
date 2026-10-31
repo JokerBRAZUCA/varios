@@ -9,8 +9,8 @@ WorkingDirectory=/opt/role
 ExecStart=/usr/bin/env node /opt/role/server/server.mjs
 Environment=PORT=8090
 Environment=HOST=127.0.0.1
-Environment=MAX_ROOMS=16
-Environment=ROOM_SIZE=50
+Environment=MAX_ROOMS=50
+Environment=ROOM_SIZE=15
 Environment=MAX_PER_IP=6
 Environment=ALLOWED_ORIGINS=https://role.close4us.com
 DynamicUser=yes
